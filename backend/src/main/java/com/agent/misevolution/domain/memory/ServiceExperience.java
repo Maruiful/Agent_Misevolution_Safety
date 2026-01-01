@@ -1,11 +1,6 @@
 package com.agent.misevolution.domain.memory;
 
-import com.agent.misevolution.domain.BaseEntity;
-import com.agent.misevolution.domain.agent.CustomerIssue;
-import com.agent.misevolution.domain.agent.CustomerResponse;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 /**
  * 服务经验实体
@@ -14,9 +9,7 @@ import lombok.EqualsAndHashCode;
  * @version 1.0.0
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
-@TableName("service_experiences")
-public class ServiceExperience extends BaseEntity {
+public class ServiceExperience {
 
     /**
      * 经验ID

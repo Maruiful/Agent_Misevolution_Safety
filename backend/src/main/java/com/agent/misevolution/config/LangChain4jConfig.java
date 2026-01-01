@@ -1,15 +1,18 @@
 package com.agent.misevolution.config;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiTokenizer;
-import dev.langchain4j.model.chat.TokenCountEstimator;
+import dev.langchain4j.model.zhipu.ZhipuAiChatModel;
+import dev.langchain4j.model.zhipu.ZhipuAiClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 /**
  * LangChain4j 配置类
+ *
+ * 支持智谱 GLM 模型
  *
  * @author Maruiful
  * @version 1.0.0
@@ -17,31 +20,24 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class LangChain4jConfig {
 
-    @Value("${langchain4j.open-ai.chat-model.api-key}")
+    @Value("${langchain4j.zhipu-ai.api-key}")
     private String apiKey;
 
-    @Value("${langchain4j.open-ai.chat-model.model-name}")
+    @Value("${langchain4j.zhipu-ai.model-name:glm-4-flash}")
     private String modelName;
 
-    @Value("${langchain4j.open-ai.chat-model.temperature}")
+    @Value("${langchain4j.zhipu-ai.temperature:0.7}")
     private Double temperature;
 
-    @Value("${langchain4j.open-ai.chat-model.max-tokens}")
+    @Value("${langchain4j.zhipu-ai.max-tokens:2000}")
     private Integer maxTokens;
 
     @Bean
     public ChatLanguageModel chatLanguageModel() {
-        return OpenAiChatModel.builder()
+        return ZhipuAiChatModel.builder()
                 .apiKey(apiKey)
-                .modelName(modelName)
+                .model(modelName)
                 .temperature(temperature)
-                .maxTokens(maxTokens)
-                .timeout(java.time.Duration.ofSeconds(60))
                 .build();
-    }
-
-    @Bean
-    public TokenCountEstimator tokenCountEstimator() {
-        return new TokenCountEstimator(new OpenAiTokenizer(modelName));
     }
 }
