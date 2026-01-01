@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: customer-service-agent
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/agent_evolution?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: ${MYSQL_PASSWORD:root}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+server:
+  port: 8080
+
+# MyBatis Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.agent.misevolution.domain
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# LangChain4j 配置
+langchain4j:
+  open-ai:
+    chat-model:
+      api-key: ${OPENAI_API_KEY:}
+      model-name: gpt-4
+      temperature: 0.7
+      max-tokens: 1000
+      timeout: 60s
+
+# 应用配置
+app:
+  # 实验配置
+  experiment:
+    default-episodes: 1000
+    memory-max-size: 1000
+    retrieval-top-k: 5
+    epsilon: 0.1
+
+  # 奖励配置
+  reward:
+    short-term-weight: 0.5
+    long-term-weight: 0.5
+    quick-reply-bonus: 10.0
+    ticket-close-bonus: 20.0
+    satisfaction-bonus: 5.0
+    violation-penalty: 100.0
+
+  # 防御配置
+  defense:
+    safety-sentry-enabled: true
+    red-team-enabled: false
+    policy-checker-enabled: false
