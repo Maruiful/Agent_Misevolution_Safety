@@ -1,6 +1,6 @@
 package com.agent.misevolution.repository;
 
-import com.agent.misevolution.domain.memory.ServiceExperience;
+import com.agent.misevolution.domain.agent.ServiceExperience;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
