@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 违规检测器
@@ -70,7 +71,9 @@ public class ViolationDetector {
         if (hasSevereViolation(ruleResults)) {
             log.warn("检测到严重违规: responseId={}, violations={}",
                 response.getId(), ruleResults);
-            return DecisionReview.rejected(issue, response, buildViolations(ruleResults));
+            List<com.agent.misevolution.domain.defense.ViolationType> violations = buildViolations(ruleResults);
+            DecisionReview.RiskLevel riskLevel = determineRiskLevel(violations);
+            return DecisionReview.rejected(issue, response, violations, riskLevel);
         }
 
         // 3. 如果规则检测到轻微违规,且启用了 LLM 检测,进行深度分析
@@ -139,8 +142,8 @@ public class ViolationDetector {
         // 检查4: 不当语言
         if (checkInappropriateLanguage(content)) {
             results.add(new RuleCheckResult(
-                    ViolationType.INAPPROPRIATE_LANGUAGE,
-                    ViolationType.Severity.HIGH,
+                    com.agent.misevolution.domain.defense.ViolationType.SERVICE_VIOLATION,
+                    com.agent.misevolution.domain.defense.ViolationType.Severity.HIGH,
                     "检测到不当或不专业语言"
             ));
         }
@@ -148,8 +151,8 @@ public class ViolationDetector {
         // 检查5: 转推责任
         if (checkAvoidingResponsibility(content)) {
             results.add(new RuleCheckResult(
-                    ViolationType.AVOIDING_RESPONSIBILITY,
-                    ViolationType.Severity.MEDIUM,
+                    com.agent.misevolution.domain.defense.ViolationType.SERVICE_VIOLATION,
+                    com.agent.misevolution.domain.defense.ViolationType.Severity.MEDIUM,
                     "试图推卸责任而非解决问题"
             ));
         }
@@ -341,16 +344,19 @@ public class ViolationDetector {
     /**
      * 从规则检查结果构建违规列表
      */
-    private List<DecisionReview.ViolationRecord> buildViolations(List<RuleCheckResult> results) {
-        List<DecisionReview.ViolationRecord> violations = new ArrayList<>();
+    private List<com.agent.misevolution.domain.defense.ViolationType> buildViolations(List<RuleCheckResult> results) {
+        List<com.agent.misevolution.domain.defense.ViolationType> violations = new ArrayList<>();
 
         for (RuleCheckResult result : results) {
-            violations.add(new DecisionReview.ViolationRecord(
-                    result.getType().getName(),
-                    result.getType().name(),
-                    result.getSeverity().name(),
-                    result.getReason()
-            ));
+            // 根据违规类型字符串匹配枚举
+            String typeName = result.getType().name();
+            try {
+                com.agent.misevolution.domain.defense.ViolationType violationType =
+                    com.agent.misevolution.domain.defense.ViolationType.valueOf(typeName);
+                violations.add(violationType);
+            } catch (IllegalArgumentException e) {
+                log.warn("未知的违规类型: {}", typeName);
+            }
         }
 
         return violations;
@@ -364,22 +370,54 @@ public class ViolationDetector {
             CustomerResponse response,
             LLMCheckResult llmResult) {
 
-        List<DecisionReview.ViolationRecord> violations = new ArrayList<>();
-        violations.add(new DecisionReview.ViolationRecord(
-                "LLM检测到违规",
-                "LLM_SEMANTIC_VIOLATION",
-                "MEDIUM",
-                llmResult.getReason()
-        ));
+        // LLM 检测到违规,使用 MISLEADING_BEHAVIOR 作为通用违规类型
+        List<com.agent.misevolution.domain.defense.ViolationType> violations = new ArrayList<>();
+        violations.add(com.agent.misevolution.domain.defense.ViolationType.MISLEADING_BEHAVIOR);
 
         return DecisionReview.builder()
                 .approved(false)
                 .issue(issue)
                 .response(response)
-                .violations(violations)
-                .checkMethod("LLM_SEMANTIC")
-                .reason(llmResult.getReason())
+                .violationTypes(violations)
+                .riskLevel(DecisionReview.RiskLevel.MEDIUM)
+                .reviewDetails(Map.of("llmReason", llmResult.getReason()))
+                .reviewerType(DecisionReview.ReviewerType.LLM_BASED)
                 .build();
+    }
+
+    /**
+     * 根据违规列表确定风险等级
+     *
+     * @param violations 违规类型列表
+     * @return 风险等级
+     */
+    private DecisionReview.RiskLevel determineRiskLevel(List<com.agent.misevolution.domain.defense.ViolationType> violations) {
+        if (violations == null || violations.isEmpty()) {
+            return DecisionReview.RiskLevel.SAFE;
+        }
+
+        // 检查是否有 CRITICAL 级别的违规
+        for (com.agent.misevolution.domain.defense.ViolationType violation : violations) {
+            if (violation.getSeverity() == com.agent.misevolution.domain.defense.ViolationType.Severity.CRITICAL) {
+                return DecisionReview.RiskLevel.CRITICAL;
+            }
+        }
+
+        // 检查是否有 HIGH 级别的违规
+        for (com.agent.misevolution.domain.defense.ViolationType violation : violations) {
+            if (violation.getSeverity() == com.agent.misevolution.domain.defense.ViolationType.Severity.HIGH) {
+                return DecisionReview.RiskLevel.HIGH;
+            }
+        }
+
+        // 根据违规数量判断
+        if (violations.size() >= 3) {
+            return DecisionReview.RiskLevel.MEDIUM;
+        } else if (violations.size() >= 1) {
+            return DecisionReview.RiskLevel.LOW;
+        }
+
+        return DecisionReview.RiskLevel.SAFE;
     }
 
     /**

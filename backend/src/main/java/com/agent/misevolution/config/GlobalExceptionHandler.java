@@ -37,7 +37,7 @@ public class GlobalExceptionHandler {
             errors.put(error.getField(), error.getDefaultMessage());
         }
 
-        return Result.error(400, "参数校验失败", errors);
+        return Result.<Map<String, String>>error(400, "参数校验失败");
     }
 
     /**
