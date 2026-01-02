@@ -29,6 +29,15 @@ langchain4j:
     api-key: ed15c2422b18421b90516d9375eccf67.gWega6EB81hp1rUo
     model-name: glm-4-flash
     temperature: 0.7
+    embedding-model: embedding-2
+
+# 记忆配置
+memory:
+  embedding:
+    cache-enabled: true
+  max-size: 1000
+  retrieval-top-k: 5
+  similarity-threshold: 0.7
 
 # 应用配置
 app:
