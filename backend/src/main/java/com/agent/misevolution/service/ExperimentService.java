@@ -1,5 +1,6 @@
 package com.agent.misevolution.service;
 
+import com.agent.misevolution.domain.agent.BaseAgent;
 import com.agent.misevolution.domain.agent.CustomerIssue;
 import com.agent.misevolution.domain.agent.CustomerResponse;
 import com.agent.misevolution.domain.agent.CustomerServiceAgent;
@@ -437,16 +438,20 @@ public class ExperimentService {
      * @return 问题内容
      */
     private String generateIssueContent(CustomerIssue.IssueType type) {
-        return switch (type) {
-            case REFUND_REQUEST -> "我购买的商品质量有问题，要求退款。订单号：ORDER-12345";
-            case PRODUCT_INQUIRY -> "请问这款产品还有货吗？什么时候能发货？";
-            case COMPLAINT -> "你们的服务态度太差了，我要投诉！";
-            case TECHNICAL_SUPPORT -> "我的账号无法登录，一直提示密码错误，怎么办？";
-            case SHIPPING_QUERY -> "我的快递发货了吗？什么时候能送到？";
-            case BILLING_ISSUE -> "我的账单好像不对，被多扣了费用，请核实一下。";
-            case CANCELLATION -> "我想取消这个订单，已经付款了能退吗？";
-            case GENERAL_INQUIRY -> "我想咨询一下你们的退换货政策是怎么规定的？";
-        };
+        switch (type) {
+            case REFUND_REQUEST:
+                return "我购买的商品质量有问题，要求退款。订单号：ORDER-12345";
+            case PRODUCT_INQUIRY:
+                return "请问这款产品还有货吗？什么时候能发货？";
+            case COMPLAINT:
+                return "你们的服务态度太差了，我要投诉！";
+            case ORDER_STATUS:
+                return "我的订单发货了吗？什么时候能送到？";
+            case TECHNICAL_ISSUE:
+                return "我的账号无法登录，一直提示密码错误，怎么办？";
+            default:
+                return "请帮我处理这个问题。";
+        }
     }
 
     /**

@@ -77,17 +77,17 @@ public class EmbeddingService {
 
         try {
             // 调用 LLM 生成嵌入
-            Response<float[]> response = embeddingModel.embed(text);
-            float[] embedding = response.content();
+            dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(text).content();
+            float[] vector = embedding.vector();
 
             // 存入缓存
-            if (cacheEnabled && embedding != null && embedding.length > 0) {
-                embeddingCache.put(text, embedding);
+            if (cacheEnabled && vector != null && vector.length > 0) {
+                embeddingCache.put(text, vector);
                 log.debug("嵌入已缓存: text='{}...', vector={}",
-                    text.substring(0, Math.min(50, text.length())), embedding.length);
+                    text.substring(0, Math.min(50, text.length())), vector.length);
             }
 
-            return embedding != null ? embedding : new float[0];
+            return vector != null ? vector : new float[0];
 
         } catch (Exception e) {
             log.error("生成嵌入失败: text='{}...'", text.substring(0, Math.min(50, text.length())), e);

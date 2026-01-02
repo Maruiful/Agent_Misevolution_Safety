@@ -381,8 +381,7 @@ public class CustomerServiceAgent extends BaseAgent {
         try {
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(UserMessage.from(prompt));
-            AiMessage response = chatLanguageModel.generate(messages);
-            return response.text();
+            return chatLanguageModel.generate(messages).content().text();
         } catch (Exception e) {
             log.error("LLM调用失败", e);
             throw new RuntimeException("LLM调用失败", e);

@@ -137,6 +137,7 @@ public class Experiment {
      * 实验统计信息
      */
     @Data
+    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ExperimentStatistics {
