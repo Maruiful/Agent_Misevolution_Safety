@@ -72,6 +72,18 @@ public class ExperimentService {
     private ExperienceMemory experienceMemory;
 
     /**
+     * 安全哨兵
+     */
+    @Autowired(required = false)
+    private com.agent.misevolution.service.defense.SafetySentry safetySentry;
+
+    /**
+     * WebSocket 消息发送服务
+     */
+    @Autowired(required = false)
+    private WebSocketService webSocketService;
+
+    /**
      * JSON 序列化工具
      */
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -319,6 +331,15 @@ public class ExperimentService {
                     experiment.getExperimentUuid(),
                     experiment.getStatistics().getTotalReward(),
                     experiment.getStatistics().getViolationCount());
+
+                // 发送实验完成通知
+                if (webSocketService != null) {
+                    webSocketService.sendExperimentCompleted(
+                        experiment.getExperimentUuid(),
+                        experiment.getTotalEpisodes(),
+                        experiment.getStatistics()
+                    );
+                }
             }
 
         } catch (InterruptedException e) {
@@ -352,12 +373,41 @@ public class ExperimentService {
             log.debug("生成决策: episode={}, strategy={}, responseTime={:.2f}s",
                 episode, response.getStrategy(), response.getResponseTime());
 
+            // 2.5 安全哨兵审查(如果启用防御)
+            boolean isViolation = false;
+            if (config.getEnableDefense() && safetySentry != null) {
+                com.agent.misevolution.domain.defense.DefenseAction defenseAction =
+                    safetySentry.reviewDecision(issue, response);
+
+                // 根据防御动作处理
+                if (defenseAction.getActionType() == com.agent.misevolution.domain.defense.DefenseAction.ActionType.BLOCK) {
+                    // 拦截决策,使用默认回复
+                    log.warn("决策被拦截: episode={}, reason={}",
+                        episode, defenseAction.getResultDescription());
+                    response.setContent("很抱歉,我无法处理您的请求。请稍后联系人工客服。");
+                    isViolation = true;
+                } else if (defenseAction.getActionType() == com.agent.misevolution.domain.defense.DefenseAction.ActionType.CORRECT) {
+                    // 自动修正
+                    log.info("决策被修正: episode={}, reason={}",
+                        episode, defenseAction.getResultDescription());
+                    response.setContent(defenseAction.getCorrectedDecision());
+                    isViolation = true;
+                } else if (defenseAction.getActionType() == com.agent.misevolution.domain.defense.DefenseAction.ActionType.WARN) {
+                    // 警告但放行
+                    log.warn("决策被警告: episode={}, reason={}",
+                        episode, defenseAction.getResultDescription());
+                    isViolation = true;
+                }
+            } else {
+                // 未启用防御,使用简单的规则检测
+                isViolation = detectViolation(response);
+            }
+
             // 3. 执行动作
             BaseAgent.ActionResult actionResult = customerServiceAgent.executeAction(response);
             log.debug("执行动作: episode={}, success={}", episode, actionResult.getSuccess());
 
             // 4. 模拟反馈（计算长期奖励）
-            boolean isViolation = detectViolation(response);
             ServiceOutcome outcome = rewardCalculator.simulateFeedback(response, isViolation);
 
             // 5. 构建完整经验
@@ -398,8 +448,37 @@ public class ExperimentService {
             log.debug("一轮完成: episode={}, reward={:.2f}, violation={}",
                 episode, experience.getReward(), experience.hasViolation());
 
+            // 10. 发送 WebSocket 实时消息(每10轮发送一次进度)
+            if (webSocketService != null && episode % 10 == 0) {
+                webSocketService.sendExperimentProgress(
+                    experiment.getExperimentUuid(),
+                    episode,
+                    experiment.getTotalEpisodes(),
+                    experiment.getStatistics()
+                );
+            }
+
+            // 11. 发送违规通知
+            if (webSocketService != null && isViolation) {
+                webSocketService.sendViolationDetected(
+                    experiment.getExperimentUuid(),
+                    episode,
+                    "VIOLATION_DETECTED",
+                    "HIGH",
+                    "检测到违规行为"
+                );
+            }
+
         } catch (Exception e) {
             log.error("执行一轮失败: episode={}", episode, e);
+
+            // 发送错误通知
+            if (webSocketService != null) {
+                webSocketService.sendError(
+                    experiment.getExperimentUuid(),
+                    "执行一轮失败: " + e.getMessage()
+                );
+            }
         }
     }
 
