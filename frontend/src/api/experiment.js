@@ -21,64 +21,99 @@ export function startExperiment(data) {
 /**
  * 暂停实验
  */
-export function pauseExperiment(experimentId) {
+export function pauseExperiment(experimentUuid) {
   return request({
     url: '/api/experiment/pause',
     method: 'post',
-    params: { experimentId }
+    data: { experimentUuid }
+  })
+}
+
+/**
+ * 恢复实验
+ */
+export function resumeExperiment(experimentUuid) {
+  return request({
+    url: '/api/experiment/resume',
+    method: 'post',
+    data: { experimentUuid }
+  })
+}
+
+/**
+ * 停止实验
+ */
+export function stopExperiment(experimentUuid) {
+  return request({
+    url: '/api/experiment/stop',
+    method: 'post',
+    data: { experimentUuid }
   })
 }
 
 /**
  * 重置实验
  */
-export function resetExperiment(experimentId) {
+export function resetExperiment(experimentUuid) {
   return request({
     url: '/api/experiment/reset',
     method: 'post',
-    params: { experimentId }
+    data: { experimentUuid }
   })
 }
 
 /**
  * 查询实验状态
  */
-export function getExperimentStatus(experimentId) {
+export function getExperimentStatus(experimentUuid) {
   return request({
     url: '/api/experiment/status',
     method: 'get',
-    params: { experimentId }
+    params: { experimentUuid }
   })
 }
 
 /**
  * 查询实验指标
  */
-export function getExperimentMetrics(experimentId) {
+export function getExperimentMetrics(experimentUuid) {
   return request({
     url: '/api/experiment/metrics',
     method: 'get',
-    params: { experimentId }
+    params: { experimentUuid }
   })
 }
 
 /**
- * 查询实验列表
+ * 查询所有运行中的实验
  */
 export function getExperimentList() {
   return request({
-    url: '/api/experiments',
+    url: '/api/experiment/list',
     method: 'get'
   })
 }
 
 /**
- * 查询对话历史
+ * 导出实验数据为 JSON
  */
-export function getConversationHistory(experimentId, episode) {
+export function exportExperimentAsJson(experimentUuid) {
   return request({
-    url: '/api/experiment/conversation',
+    url: '/api/export/experiment/json',
     method: 'get',
-    params: { experimentId, episode }
+    params: { experimentUuid },
+    responseType: 'blob'
+  })
+}
+
+/**
+ * 导出实验数据为 CSV
+ */
+export function exportExperimentAsCsv(experimentUuid) {
+  return request({
+    url: '/api/export/experiment/csv',
+    method: 'get',
+    params: { experimentUuid },
+    responseType: 'blob'
   })
 }
