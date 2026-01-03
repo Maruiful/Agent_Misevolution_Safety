@@ -9,6 +9,7 @@ import com.agent.misevolution.domain.agent.ServiceOutcome;
 import com.agent.misevolution.domain.experiment.Experiment;
 import com.agent.misevolution.dto.ExperimentConfig;
 import com.agent.misevolution.repository.ServiceExperienceMapper;
+import com.agent.misevolution.repository.ExperimentMapper;
 import com.agent.misevolution.service.evolution.RewardCalculator;
 import com.agent.misevolution.service.memory.ExperienceMemory;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -91,6 +92,12 @@ public class ExperimentService {
     private ServiceExperienceMapper serviceExperienceMapper;
 
     /**
+     * 实验数据访问层
+     */
+    @Autowired(required = false)
+    private ExperimentMapper experimentMapper;
+
+    /**
      * JSON 序列化工具
      */
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -120,6 +127,18 @@ public class ExperimentService {
         } catch (JsonProcessingException e) {
             log.error("序列化实验配置失败", e);
             throw new RuntimeException("序列化实验配置失败", e);
+        }
+
+        // 保存实验元数据到数据库
+        Long experimentDbId = saveExperimentToDatabase(experiment, config, name);
+        if (experimentDbId != null) {
+            // 设置数据库ID
+            experiment.setId(experimentDbId);
+            log.info("实验元数据已保存到数据库: uuid={}, dbId={}",
+                experiment.getExperimentUuid(), experimentDbId);
+        } else {
+            log.warn("实验元数据保存到数据库失败，继续运行实验: uuid={}",
+                experiment.getExperimentUuid());
         }
 
         // 存储到运行中的实验列表
@@ -607,6 +626,58 @@ public class ExperimentService {
     }
 
     /**
+     * 保存实验元数据到数据库
+     *
+     * @param experiment 实验
+     * @param config 实验配置
+     * @param name 实验名称
+     * @return 数据库生成的实验ID
+     */
+    private Long saveExperimentToDatabase(Experiment experiment, ExperimentConfig config, String name) {
+        if (experimentMapper == null) {
+            log.warn("ExperimentMapper 未注入,跳过数据库保存");
+            return null;
+        }
+
+        try {
+            // 序列化配置为JSON
+            String configJson;
+            try {
+                configJson = objectMapper.writeValueAsString(config);
+            } catch (JsonProcessingException e) {
+                log.error("序列化实验配置失败", e);
+                return null;
+            }
+
+            // 构建参数
+            Map<String, Object> params = new java.util.HashMap<>();
+            params.put("experimentName", name);
+            params.put("scenario", config.getScenario());
+            params.put("config", configJson);
+            params.put("status", "running");
+            params.put("totalEpisodes", config.getEpisodes());
+            params.put("currentEpisode", 0);
+            params.put("startTime", LocalDateTime.now());
+
+            // 插入数据库（useGeneratedKeys会自动回填ID到params的"id"字段）
+            int rows = experimentMapper.insert(params);
+
+            if (rows > 0 && params.containsKey("id")) {
+                Long dbId = ((Number) params.get("id")).longValue();
+                log.info("实验元数据已保存: dbId={}, name={}", dbId, name);
+                return dbId;
+            } else {
+                log.warn("实验元数据保存失败: name={}", name);
+                return null;
+            }
+
+        } catch (Exception e) {
+            log.error("保存实验元数据到数据库失败: name={}", name, e);
+            return null;
+        }
+    }
+
+    /**
      * 保存经验到数据库
      *
      * @param experiment 实验
@@ -621,7 +692,15 @@ public class ExperimentService {
         try {
             // 构建数据库实体 (使用 Map 传递给 MyBatis)
             Map<String, Object> params = new java.util.HashMap<>();
-            params.put("experimentId", experiment.getId());
+
+            // 使用数据库中的实验ID
+            Long experimentId = experiment.getId();
+            if (experimentId == null) {
+                log.warn("实验ID为空，无法保存经验: uuid={}", experiment.getExperimentUuid());
+                return;
+            }
+
+            params.put("experimentId", experimentId);
             params.put("episode", experience.getEpisode());
             params.put("customerIssue", experience.getIssue() != null ? experience.getIssue().getContent() : "");
             params.put("agentResponse", experience.getResponse() != null ? experience.getResponse().getContent() : "");

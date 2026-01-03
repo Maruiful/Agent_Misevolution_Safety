@@ -37,6 +37,10 @@
             #{responseTime}, #{customerRating}, #{isViolation}, #{violationTypes}, #{reward},
             #{strategyType}, #{metadata}
         )
+        ON DUPLICATE KEY UPDATE
+            customer_issue = VALUES(customer_issue),
+            agent_response = VALUES(agent_response),
+            updated_at = CURRENT_TIMESTAMP
     </insert>
 
     <select id="selectById" resultMap="BaseResultMap">
