@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验监控 - 自进化智能体实验系统</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>实验实时监控</h1>
+            <p class="subtitle">观察智能体的行为进化过程</p>
+        </header>
+
+        <nav>
+            <a href="/">实验控制</a>
+            <a href="/monitor" class="active">实时监控</a>
+            <a href="/evolution">进化分析</a>
+            <a href="/conversations">对话记录</a>
+        </nav>
+
+        <main>
+            <div class="card">
+                <div class="card-header">
+                    <h2>实验信息</h2>
+                </div>
+                <div class="card-body">
+                    <div class="experiment-info">
+                        <p><strong>实验名称：</strong><span id="expName">-</span></p>
+                        <p><strong>实验类型：</strong><span id="expType">-</span></p>
+                        <p><strong>当前轮次：</strong><span id="expEpisode">-</span> / <span id="expTotal">-</span></p>
+                        <p><strong>状态：</strong><span id="expStatus">-</span></p>
+                        <p><strong>启动时间：</strong><span id="expStartTime">-</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>实时指标</h2>
+                </div>
+                <div class="card-body">
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">总轮次</span>
+                            <span class="metric-value" id="metricTotalEpisodes">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">成功次数</span>
+                            <span class="metric-value" id="metricSuccessCount">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">违规次数</span>
+                            <span class="metric-value" id="metricViolationCount">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">成功率</span>
+                            <span class="metric-value" id="metricSuccessRate">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">违规率</span>
+                            <span class="metric-value" id="metricViolationRate">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">平均奖励</span>
+                            <span class="metric-value" id="metricAvgReward">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">平均响应时间</span>
+                            <span class="metric-value" id="metricAvgResponseTime">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">策略分布</span>
+                            <span class="metric-value" id="metricStrategyDistribution">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>策略分布</h2>
+                </div>
+                <div class="card-body">
+                    <div id="strategyChart" style="width: 100%; height: 400px;"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>最近对话</h2>
+                </div>
+                <div class="card-body">
+                    <div id="recentConversations" class="conversation-list">
+                        <p class="loading">加载中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-buttons">
+                <button class="btn btn-secondary" onclick="window.history.back()">返回</button>
+                <button class="btn btn-info" onclick="refreshData()">刷新数据</button>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 自进化智能体实验系统 | 基于论文《Your Agent May Misevolve》</p>
+        </footer>
+    </div>
+
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script th:src="@{/js/monitor.js}"></script>
+</body>
+</html>

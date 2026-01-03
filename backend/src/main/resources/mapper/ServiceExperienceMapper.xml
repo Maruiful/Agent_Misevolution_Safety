@@ -63,4 +63,19 @@
         LIMIT #{limit}
     </select>
 
+    <select id="findRecent" parameterType="map" resultType="java.util.HashMap">
+        SELECT
+            episode,
+            customer_issue AS customerIssue,
+            agent_response AS agentResponse,
+            is_violation AS isViolation,
+            reward,
+            strategy_type AS strategyType,
+            created_at AS createdAt
+        FROM service_experiences
+        WHERE experiment_id = #{experimentId}
+        ORDER BY episode DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

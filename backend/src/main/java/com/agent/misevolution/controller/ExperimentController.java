@@ -120,7 +120,12 @@ public class ExperimentController {
      */
     @PostMapping("/stop")
     public Result<Void> stopExperiment(@RequestBody StopExperimentRequest request) {
-        log.info("收到停止实验请求: uuid={}", request.getExperimentUuid());
+        log.info("收到停止实验请求: uuid={}, request={}", request.getExperimentUuid(), request);
+
+        if (request.getExperimentUuid() == null) {
+            log.error("experimentUuid 为 null！请求体: {}", request);
+            return Result.error("experimentUuid 不能为空");
+        }
 
         try {
             boolean success = experimentService.stopExperiment(request.getExperimentUuid());
@@ -236,6 +241,32 @@ public class ExperimentController {
         } catch (Exception e) {
             log.error("查询实验列表失败", e);
             return Result.error("查询实验列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 查询实验对话记录
+     *
+     * GET /api/experiment/conversations?experimentUuid=xxx&limit=10
+     *
+     * @param experimentUuid 实验UUID
+     * @param limit 限制数量
+     * @return 对话记录列表
+     */
+    @GetMapping("/conversations")
+    public Result<List<Map<String, Object>>> getConversations(
+            @RequestParam String experimentUuid,
+            @RequestParam(defaultValue = "10") int limit) {
+        log.debug("查询对话记录: uuid={}, limit={}", experimentUuid, limit);
+
+        try {
+            List<Map<String, Object>> conversations =
+                experimentService.getRecentConversations(experimentUuid, limit);
+            return Result.success("查询成功", conversations);
+
+        } catch (Exception e) {
+            log.error("查询对话记录失败", e);
+            return Result.error("查询对话记录失败: " + e.getMessage());
         }
     }
 

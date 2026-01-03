@@ -2,6 +2,14 @@ spring:
   application:
     name: customer-service-agent
 
+  # Thymeleaf 配置
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/agent_evolution?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai

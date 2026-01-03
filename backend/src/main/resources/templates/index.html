@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自进化智能体实验系统</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>自进化智能体实验系统</h1>
+            <p class="subtitle">基于论文《Your Agent May Misevolve》的风险分析与防御实践</p>
+        </header>
+
+        <nav>
+            <a href="/" class="active">实验控制</a>
+            <a href="/monitor">实时监控</a>
+            <a href="/evolution">进化分析</a>
+            <a href="/conversations">对话记录</a>
+        </nav>
+
+        <main>
+            <div class="card">
+                <div class="card-header">
+                    <h2>创建新实验</h2>
+                </div>
+                <div class="card-body">
+                    <form id="experimentForm" th:action="@{/api/experiment/start}" method="post">
+                        <div class="form-group">
+                            <label for="experimentName">实验名称</label>
+                            <input type="text" id="experimentName" name="experimentName" required placeholder="例如：客服智能体-基线实验">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="scenario">实验场景</label>
+                            <select id="scenario" name="scenario" required>
+                                <option value="customer_service">客服场景</option>
+                                <option value="code_repair">代码修复场景</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="episodes">训练轮次</label>
+                            <input type="number" id="episodes" name="episodes" value="1000" min="100" max="10000" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="experimentType">实验类型</label>
+                            <select id="experimentType" name="experimentType" required onchange="updateTypeSettings()">
+                                <option value="baseline">基线实验</option>
+                                <option value="induced">诱导实验</option>
+                                <option value="defense">防御实验</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableMemory" name="enableMemory">
+                                启用记忆机制
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableEvolution" name="enableEvolution">
+                                启用进化机制
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableDefense" name="enableDefense">
+                                启用防御机制
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="shortTermWeight">短期奖励权重</label>
+                            <input type="number" id="shortTermWeight" name="shortTermWeight" value="0.5" min="0" max="1" step="0.1" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="longTermWeight">长期奖励权重</label>
+                            <input type="number" id="longTermWeight" name="longTermWeight" value="0.5" min="0" max="1" step="0.1" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">启动实验</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>实验列表</h2>
+                </div>
+                <div class="card-body">
+                    <div id="experimentList">
+                        <p>加载中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="runningExperimentCard" style="display: none;">
+                <div class="card-header">
+                    <h2>正在运行的实验</h2>
+                </div>
+                <div class="card-body">
+                    <div class="experiment-info">
+                        <p><strong>实验名称：</strong><span id="runningName">-</span></p>
+                        <p><strong>实验类型：</strong><span id="runningType">-</span></p>
+                        <p><strong>当前轮次：</strong><span id="runningEpisode">-</span> / <span id="runningTotal">-</span></p>
+                        <p><strong>状态：</strong><span id="runningStatus">-</span></p>
+                    </div>
+
+                    <div class="control-buttons">
+                        <button id="pauseBtn" class="btn btn-warning" onclick="pauseExperiment()">暂停</button>
+                        <button id="resumeBtn" class="btn btn-success" onclick="resumeExperiment()" style="display: none;">继续</button>
+                        <button id="stopBtn" class="btn btn-danger" onclick="stopExperiment()">停止</button>
+                        <button id="resetBtn" class="btn btn-secondary" onclick="resetExperiment()">重置</button>
+                        <button class="btn btn-info" onclick="viewMonitor()">查看监控</button>
+                    </div>
+
+                    <div class="metrics">
+                        <h3>实时指标</h3>
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-label">成功率</span>
+                                <span class="metric-value" id="metricSuccess">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">违规次数</span>
+                                <span class="metric-value" id="metricViolations">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">平均奖励</span>
+                                <span class="metric-value" id="metricReward">-</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">响应时间</span>
+                                <span class="metric-value" id="metricTime">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 自进化智能体实验系统 | 基于论文《Your Agent May Misevolve》</p>
+        </footer>
+    </div>
+
+    <script th:src="@{/js/main.js}"></script>
+</body>
+</html>

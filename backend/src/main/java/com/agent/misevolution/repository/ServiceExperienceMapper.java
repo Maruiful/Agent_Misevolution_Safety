@@ -37,4 +37,9 @@ public interface ServiceExperienceMapper {
      */
     List<ServiceExperience> findViolationsByExperiment(@Param("experimentId") Long experimentId,
                                                         @Param("limit") Integer limit);
+
+    /**
+     * 查询最近的对话记录
+     */
+    List<Map<String, Object>> findRecent(Map<String, Object> params);
 }

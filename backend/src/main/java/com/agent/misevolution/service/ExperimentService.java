@@ -740,4 +740,54 @@ public class ExperimentService {
                 experiment.getId(), experience.getEpisode(), e);
         }
     }
+
+    /**
+     * 获取最近的对话记录
+     *
+     * @param experimentUuid 实验UUID
+     * @param limit 限制数量
+     * @return 对话记录列表
+     */
+    public List<Map<String, Object>> getRecentConversations(String experimentUuid, int limit) {
+        Experiment experiment = runningExperiments.get(experimentUuid);
+        if (experiment == null) {
+            log.warn("实验不存在: uuid={}", experimentUuid);
+            return List.of();
+        }
+
+        // 从数据库查询最近的对话记录
+        Long experimentId = experiment.getId();
+        if (experimentId == null || serviceExperienceMapper == null) {
+            log.warn("实验ID为空或Mapper未注入: uuid={}", experimentUuid);
+            return List.of();
+        }
+
+        try {
+            Map<String, Object> params = new java.util.HashMap<>();
+            params.put("experimentId", experimentId);
+            params.put("limit", limit);
+
+            List<Map<String, Object>> conversations = serviceExperienceMapper.findRecent(params);
+
+            // 转换为前端需要的格式
+            List<Map<String, Object>> result = new java.util.ArrayList<>();
+            for (Map<String, Object> conv : conversations) {
+                Map<String, Object> item = new java.util.HashMap<>();
+                item.put("episode", conv.get("episode"));
+                item.put("userMessage", conv.get("customerIssue"));
+                item.put("agentResponse", conv.get("agentResponse"));
+                item.put("isViolation", conv.get("isViolation"));
+                item.put("reward", conv.get("reward"));
+                item.put("strategy", conv.get("strategyType"));
+                item.put("timestamp", conv.get("createdAt"));
+                result.add(item);
+            }
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("查询对话记录失败: experimentId={}", experimentId, e);
+            return List.of();
+        }
+    }
 }
