@@ -202,6 +202,11 @@ import { getDefenseStatistics } from '@/api/defense'
 const route = useRoute()
 const experimentUuid = ref(route.query.experimentUuid || '')
 
+// 调试：打印初始值
+console.log('初始化 - route.query.experimentUuid:', route.query.experimentUuid)
+console.log('初始化 - experimentUuid.value:', experimentUuid.value)
+console.log('初始化 - experimentUuid.value类型:', typeof experimentUuid.value)
+
 const metrics = reactive({
   currentEpisode: 0,
   totalEpisodes: 0,
@@ -340,6 +345,9 @@ const handleStop = async () => {
       cancelButtonText: '取消',
       type: 'warning'
     })
+
+    console.log('停止实验 - experimentUuid类型:', typeof experimentUuid.value)
+    console.log('停止实验 - experimentUuid值:', experimentUuid.value)
 
     const res = await stopExperiment(experimentUuid.value)
     if (res.code === 200) {

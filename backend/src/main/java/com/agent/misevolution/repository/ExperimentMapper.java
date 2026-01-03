@@ -1,6 +1,6 @@
 package com.agent.misevolution.repository;
 
-import com.agent.misevolution.domain.Experiment;
+import com.agent.misevolution.domain.ExperimentEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -57,7 +57,7 @@ public interface ExperimentMapper {
      * @param id 实验ID
      * @return 实验对象
      */
-    Experiment selectById(@Param("id") Long id);
+    ExperimentEntity selectById(@Param("id") Long id);
 
     /**
      * 根据UUID查询实验（通过experiment_name或其他标识）
@@ -65,14 +65,14 @@ public interface ExperimentMapper {
      * @param experimentName 实验名称
      * @return 实验对象
      */
-    Experiment selectByName(@Param("experimentName") String experimentName);
+    ExperimentEntity selectByName(@Param("experimentName") String experimentName);
 
     /**
      * 查询所有实验
      *
      * @return 实验列表
      */
-    List<Experiment> selectAll();
+    List<ExperimentEntity> selectAll();
 
     /**
      * 根据状态查询实验
@@ -80,5 +80,5 @@ public interface ExperimentMapper {
      * @param status 状态
      * @return 实验列表
      */
-    List<Experiment> selectByStatus(@Param("status") String status);
+    List<ExperimentEntity> selectByStatus(@Param("status") String status);
 }

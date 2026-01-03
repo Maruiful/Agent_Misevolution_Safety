@@ -25,6 +25,12 @@ request.interceptors.request.use(
     // if (token) {
     //   config.headers['Authorization'] = `Bearer ${token}`
     // }
+
+    // 调试：打印请求数据
+    if (config.data) {
+      console.log('请求数据:', config.method?.toUpperCase(), config.url, config.data)
+    }
+
     return config
   },
   error => {

@@ -22,10 +22,12 @@ export function startExperiment(data) {
  * 暂停实验
  */
 export function pauseExperiment(experimentUuid) {
+  // 处理 experimentUuid 可能是对象的情况
+  const uuid = typeof experimentUuid === 'object' ? experimentUuid.experimentUuid : experimentUuid
   return request({
     url: '/api/experiment/pause',
     method: 'post',
-    data: { experimentUuid }
+    data: { experimentUuid: uuid }
   })
 }
 
@@ -33,10 +35,12 @@ export function pauseExperiment(experimentUuid) {
  * 恢复实验
  */
 export function resumeExperiment(experimentUuid) {
+  // 处理 experimentUuid 可能是对象的情况
+  const uuid = typeof experimentUuid === 'object' ? experimentUuid.experimentUuid : experimentUuid
   return request({
     url: '/api/experiment/resume',
     method: 'post',
-    data: { experimentUuid }
+    data: { experimentUuid: uuid }
   })
 }
 
@@ -44,10 +48,12 @@ export function resumeExperiment(experimentUuid) {
  * 停止实验
  */
 export function stopExperiment(experimentUuid) {
+  // 处理 experimentUuid 可能是对象的情况
+  const uuid = typeof experimentUuid === 'object' ? experimentUuid.experimentUuid : experimentUuid
   return request({
     url: '/api/experiment/stop',
     method: 'post',
-    data: { experimentUuid }
+    data: { experimentUuid: uuid }
   })
 }
 
@@ -55,10 +61,12 @@ export function stopExperiment(experimentUuid) {
  * 重置实验
  */
 export function resetExperiment(experimentUuid) {
+  // 处理 experimentUuid 可能是对象的情况
+  const uuid = typeof experimentUuid === 'object' ? experimentUuid.experimentUuid : experimentUuid
   return request({
     url: '/api/experiment/reset',
     method: 'post',
-    data: { experimentUuid }
+    data: { experimentUuid: uuid }
   })
 }
 
@@ -66,10 +74,12 @@ export function resetExperiment(experimentUuid) {
  * 查询实验状态
  */
 export function getExperimentStatus(experimentUuid) {
+  // 处理 experimentUuid 可能是对象的情况
+  const uuid = typeof experimentUuid === 'object' ? experimentUuid.experimentUuid : experimentUuid
   return request({
     url: '/api/experiment/status',
     method: 'get',
-    params: { experimentUuid }
+    params: { experimentUuid: uuid }
   })
 }
 
@@ -77,10 +87,12 @@ export function getExperimentStatus(experimentUuid) {
  * 查询实验指标
  */
 export function getExperimentMetrics(experimentUuid) {
+  // 处理 experimentUuid 可能是对象的情况
+  const uuid = typeof experimentUuid === 'object' ? experimentUuid.experimentUuid : experimentUuid
   return request({
     url: '/api/experiment/metrics',
     method: 'get',
-    params: { experimentUuid }
+    params: { experimentUuid: uuid }
   })
 }
 

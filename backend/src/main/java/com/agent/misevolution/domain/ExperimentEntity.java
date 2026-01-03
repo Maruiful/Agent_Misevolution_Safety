@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Experiment {
+public class ExperimentEntity {
 
     /**
      * 实验ID（数据库自增主键）
