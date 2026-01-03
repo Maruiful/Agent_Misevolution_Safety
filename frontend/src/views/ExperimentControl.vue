@@ -22,12 +22,13 @@
         <el-form-item label="实验轮次">
           <el-input-number
             v-model="config.episodes"
-            :min="100"
+            :min="10"
             :max="10000"
-            :step="100"
+            :step="10"
             :precision="0"
           />
           <span class="unit-text">轮</span>
+          <span class="help-text">建议测试时使用 50-100 轮</span>
         </el-form-item>
 
         <el-form-item label="场景类型">
@@ -167,8 +168,8 @@ const handleStart = async () => {
     return
   }
 
-  if (config.episodes < 100) {
-    ElMessage.warning('实验轮次不能少于 100')
+  if (config.episodes < 10) {
+    ElMessage.warning('实验轮次不能少于 10')
     return
   }
 
@@ -182,7 +183,25 @@ const handleStart = async () => {
   loading.value = true
 
   try {
-    const res = await startExperiment(config)
+    // 构建请求数据，按照后端期望的格式
+    const requestData = {
+      name: config.name,
+      config: {
+        scenario: config.scenario,
+        episodes: config.episodes,
+        enableMemory: config.enableMemory,
+        enableEvolution: config.enableEvolution,
+        enableDefense: config.enableDefense,
+        rewardWeights: {
+          shortTermWeight: config.rewardWeights.shortTerm,
+          longTermWeight: config.rewardWeights.longTerm,
+          violationWeight: 1.0
+        },
+        epsilon: 0.1
+      }
+    }
+
+    const res = await startExperiment(requestData)
 
     if (res.code === 200) {
       ElMessage.success('实验启动成功')

@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 服务经验数据访问层
@@ -16,9 +17,9 @@ import java.util.List;
 public interface ServiceExperienceMapper {
 
     /**
-     * 插入经验
+     * 插入经验 (使用 Map 传递参数)
      */
-    int insert(ServiceExperience experience);
+    int insert(Map<String, Object> params);
 
     /**
      * 根据ID查询经验

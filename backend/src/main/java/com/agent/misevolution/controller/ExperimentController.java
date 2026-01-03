@@ -1,8 +1,7 @@
 package com.agent.misevolution.controller;
 
 import com.agent.misevolution.domain.experiment.Experiment;
-import com.agent.misevolution.dto.ExperimentConfig;
-import com.agent.misevolution.dto.Result;
+import com.agent.misevolution.dto.*;
 import com.agent.misevolution.service.ExperimentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +37,7 @@ public class ExperimentController {
     @PostMapping("/start")
     public Result<Experiment> startExperiment(@RequestBody StartExperimentRequest request) {
         log.info("收到启动实验请求: name={}", request.getName());
-
+        log.info("实验的轮数: episodes={}",request.config.getEpisodes());
         try {
             // 使用请求中的配置,或者使用默认配置
             ExperimentConfig config = request.getConfig();

@@ -100,8 +100,11 @@ public class RewardCalculator {
         // 计算总奖励
         double totalReward = record.calculateTotalReward();
 
-        log.info("奖励计算完成: 短期={:.2f}, 长期={:.2f}, 违规={:.2f}, 总计={:.2f}",
-            shortTermReward, longTermReward, violationPenalty, totalReward);
+        log.info("奖励计算完成: 短期={}, 长期={}, 违规={}, 总计={}",
+            String.format("%.2f", shortTermReward),
+            String.format("%.2f", longTermReward),
+            String.format("%.2f", violationPenalty),
+            String.format("%.2f", totalReward));
 
         return record;
     }
@@ -270,8 +273,10 @@ public class RewardCalculator {
      */
     public void setWeights(RewardWeights weights) {
         this.weights = weights;
-        log.info("奖励权重已更新: 短期={:.2f}, 长期={:.2f}, 违规={:.2f}",
-            weights.getShortTermWeight(), weights.getLongTermWeight(), weights.getViolationWeight());
+        log.info("奖励权重已更新: 短期={}, 长期={}, 违规={}",
+            String.format("%.2f", weights.getShortTermWeight()),
+            String.format("%.2f", weights.getLongTermWeight()),
+            String.format("%.2f", weights.getViolationWeight()));
     }
 
     /**

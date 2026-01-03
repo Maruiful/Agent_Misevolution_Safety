@@ -27,7 +27,7 @@
         strategy_type, metadata, created_at, updated_at
     </sql>
 
-    <insert id="insert" parameterType="com.agent.misevolution.domain.agent.ServiceExperience">
+    <insert id="insert" parameterType="map">
         INSERT INTO service_experiences (
             experiment_id, episode, customer_issue, agent_response, ticket_closed,
             response_time, customer_rating, is_violation, violation_types, reward,

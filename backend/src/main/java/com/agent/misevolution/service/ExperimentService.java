@@ -8,6 +8,7 @@ import com.agent.misevolution.domain.agent.ServiceExperience;
 import com.agent.misevolution.domain.agent.ServiceOutcome;
 import com.agent.misevolution.domain.experiment.Experiment;
 import com.agent.misevolution.dto.ExperimentConfig;
+import com.agent.misevolution.repository.ServiceExperienceMapper;
 import com.agent.misevolution.service.evolution.RewardCalculator;
 import com.agent.misevolution.service.memory.ExperienceMemory;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -82,6 +83,12 @@ public class ExperimentService {
      */
     @Autowired(required = false)
     private WebSocketService webSocketService;
+
+    /**
+     * 服务经验数据访问层
+     */
+    @Autowired(required = false)
+    private ServiceExperienceMapper serviceExperienceMapper;
 
     /**
      * JSON 序列化工具
@@ -327,9 +334,9 @@ public class ExperimentService {
             // 实验完成
             if (experiment.isRunning()) {
                 experiment.complete();
-                log.info("实验完成: uuid={}, totalReward={:.2f}, violationCount={}",
+                log.info("实验完成: uuid={}, totalReward={}, violationCount={}",
                     experiment.getExperimentUuid(),
-                    experiment.getStatistics().getTotalReward(),
+                    String.format("%.2f", experiment.getStatistics().getTotalReward()),
                     experiment.getStatistics().getViolationCount());
 
                 // 发送实验完成通知
@@ -444,6 +451,9 @@ public class ExperimentService {
             if (config.getEnableMemory()) {
                 experienceMemory.addExperience(experience);
             }
+
+            // 9.5 保存经验到数据库
+            saveExperienceToDatabase(experiment, experience);
 
             log.debug("一轮完成: episode={}, reward={:.2f}, violation={}",
                 episode, experience.getReward(), experience.hasViolation());
@@ -594,5 +604,61 @@ public class ExperimentService {
         stats.put("enableDefense", experiment.getEnableDefense());
 
         return stats;
+    }
+
+    /**
+     * 保存经验到数据库
+     *
+     * @param experiment 实验
+     * @param experience 经验数据
+     */
+    private void saveExperienceToDatabase(Experiment experiment, ServiceExperience experience) {
+        if (serviceExperienceMapper == null) {
+            log.warn("ServiceExperienceMapper 未注入,跳过数据库保存");
+            return;
+        }
+
+        try {
+            // 构建数据库实体 (使用 Map 传递给 MyBatis)
+            Map<String, Object> params = new java.util.HashMap<>();
+            params.put("experimentId", experiment.getId());
+            params.put("episode", experience.getEpisode());
+            params.put("customerIssue", experience.getIssue() != null ? experience.getIssue().getContent() : "");
+            params.put("agentResponse", experience.getResponse() != null ? experience.getResponse().getContent() : "");
+            params.put("ticketClosed", experience.getResponse() != null && experience.getResponse().hasClosedTicket());
+            params.put("responseTime", experience.getResponse() != null ? experience.getResponse().getResponseTime() : 0.0);
+            params.put("customerRating", experience.getOutcome() != null ? experience.getOutcome().getCustomerRating() : 0);
+            params.put("isViolation", experience.hasViolation());
+            params.put("violationTypes", experience.getViolationTypes());
+            params.put("reward", experience.getReward());
+            params.put("strategyType", experience.getStrategyType() != null ? experience.getStrategyType().name() : "UNKNOWN");
+
+            // 元数据 (转为 JSON 字符串)
+            try {
+                String metadata = objectMapper.writeValueAsString(Map.of(
+                    "responseTime", experience.getResponse() != null ? experience.getResponse().getResponseTime() : 0.0,
+                    "strategy", experience.getStrategyType() != null ? experience.getStrategyType().name() : "UNKNOWN",
+                    "uuid", experience.getId()
+                ));
+                params.put("metadata", metadata);
+            } catch (JsonProcessingException e) {
+                log.warn("序列化元数据失败", e);
+                params.put("metadata", "{}");
+            }
+
+            // 保存到数据库
+            int rows = serviceExperienceMapper.insert(params);
+            if (rows > 0) {
+                log.debug("经验已保存到数据库: experimentId={}, episode={}",
+                    experiment.getId(), experience.getEpisode());
+            } else {
+                log.warn("保存经验失败: experimentId={}, episode={}",
+                    experiment.getId(), experience.getEpisode());
+            }
+
+        } catch (Exception e) {
+            log.error("保存经验到数据库失败: experimentId={}, episode={}",
+                experiment.getId(), experience.getEpisode(), e);
+        }
     }
 }

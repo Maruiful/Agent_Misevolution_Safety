@@ -284,7 +284,14 @@ const loadExperimentData = async () => {
     // 获取实验指标
     const metricsRes = await getExperimentMetrics(experimentUuid.value)
     if (metricsRes.code === 200) {
-      Object.assign(metrics, metricsRes.data.statistics || {})
+      const data = metricsRes.data
+      // 更新基本指标
+      metrics.currentEpisode = data.currentEpisode || 0
+      metrics.totalEpisodes = data.totalEpisodes || 0
+      // 更新统计数据
+      if (data.statistics) {
+        Object.assign(metrics, data.statistics)
+      }
     }
 
     // 获取防御统计

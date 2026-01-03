@@ -132,8 +132,8 @@ public class CustomerServiceAgent extends BaseAgent {
             // 6. 更新策略使用统计
             selectedStrategy.recordUsage(0.0, true, false); // 暂时标记为成功，后续根据反馈更新
 
-            log.info("决策生成完成: responseId={}, 策略={}, 耗时={:.2f}s",
-                response.getId(), selectedStrategy.getName(), responseTime);
+            log.info("决策生成完成: responseId={}, 策略={}, 耗时={}s",
+                response.getId(), selectedStrategy.getName(), String.format("%.2f", responseTime));
 
             return response;
 
