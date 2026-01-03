@@ -19,7 +19,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/defense")
-@CrossOrigin(origins = "*")
 public class DefenseController {
 
     @Autowired(required = false)

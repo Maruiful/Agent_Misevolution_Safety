@@ -22,7 +22,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/experiment")
-@CrossOrigin(origins = "*")
 public class ExperimentController {
 
     @Autowired

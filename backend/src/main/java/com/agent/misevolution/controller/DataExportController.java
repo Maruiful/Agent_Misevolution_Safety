@@ -28,7 +28,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/export")
-@CrossOrigin(origins = "*")
 public class DataExportController {
 
     @Autowired
