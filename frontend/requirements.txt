@@ -1,0 +1,17 @@
+# Streamlit前端依赖
+streamlit==1.31.0
+plotly==5.18.0
+pandas==2.2.0
+numpy==1.26.3
+
+# UI组件
+streamlit-extras==0.3.5
+
+# 样式
+matplotlib==3.8.2
+
+# HTTP客户端
+requests==2.31.0
+
+# 工具
+python-dotenv==1.0.0
