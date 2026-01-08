@@ -277,3 +277,62 @@ def format_formula_display(
         </div>
     </div>
     """
+
+
+def calculate_strategy_parameters(round_id: int, data: List[Dict]) -> Dict[str, float]:
+    """
+    计算策略参数（用于显示公式）
+
+    这个函数被 streamlit_app.py 调用，用于显示进化推理面板
+
+    Args:
+        round_id: 当前轮次
+        data: 实验数据列表
+
+    Returns:
+        包含策略参数的字典
+    """
+    if round_id == 0 or not data:
+        return {
+            "theta_i": 0.5,
+            "tau_i": 0.3,
+            "r_i": 0.0,
+            "theta_i_plus_1": 0.5
+        }
+
+    # 获取当前轮次之前的数据
+    current_data = data[:round_id]
+
+    if not current_data:
+        return {
+            "theta_i": 0.5,
+            "tau_i": 0.3,
+            "r_i": 0.0,
+            "theta_i_plus_1": 0.5
+        }
+
+    # 计算平均奖励
+    avg_reward = sum(d.get("total_reward", 0) for d in current_data) / len(current_data)
+
+    # 计算违规率
+    violations = sum(1 for d in current_data if d.get("is_violation", False))
+    violation_rate = violations / len(current_data)
+
+    # 当前策略参数 (基础值 + 违规影响)
+    theta_i = 0.5 + violation_rate * 0.3
+
+    # 输入特征 (随轮次增长)
+    tau_i = 0.3 + (round_id / 500.0) * 0.2
+
+    # 历史反馈 (归一化的平均奖励)
+    r_i = avg_reward / 30.0  # 假设最大奖励约30
+
+    # 更新后的策略
+    theta_i_plus_1 = theta_i + 0.1 * (r_i - 0.5)
+
+    return {
+        "theta_i": round(theta_i, 3),
+        "tau_i": round(tau_i, 3),
+        "r_i": round(r_i, 3),
+        "theta_i_plus_1": round(theta_i_plus_1, 3)
+    }

@@ -206,6 +206,76 @@ class Styles:
         border: 1px solid {Colors.BORDER_LIGHT};
     }}
 
+    /* ========== Streamlit聊天组件优化 ========== */
+    .stChatMessage {{
+        padding: 12px !important;
+    }}
+
+    /* 用户消息样式优化 */
+    .stChatMessage[data-testid="user-message"] {{
+        background-color: {Colors.DEEP_BLUE} !important;
+        border-radius: 12px !important;
+    }}
+
+    /* 智能体消息样式优化 */
+    .stChatMessage[data-testid="assistant-message"] {{
+        background-color: white !important;
+        border: 1px solid #E0E0E0 !important;
+        border-radius: 12px !important;
+    }}
+
+    /* 聊天输入框优化 */
+    .stChatInputContainer {{
+        border-top: 1px solid {Colors.BORDER_LIGHT} !important;
+        padding-top: 16px !important;
+    }}
+
+    /* ========== 容器滚动条优化 ========== */
+    [data-testid="stVerticalBlock"] > div[style*="height"] {{
+        overflow-y: auto !important;
+    }}
+
+    /* 隐藏滚动条但保持滚动功能 */
+    .stChatMessageContainer::-webkit-scrollbar {{
+        width: 6px;
+    }}
+
+    .stChatMessageContainer::-webkit-scrollbar-track {{
+        background: transparent;
+    }}
+
+    .stChatMessageContainer::-webkit-scrollbar-thumb {{
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }}
+
+    .stChatMessageContainer::-webkit-scrollbar-thumb:hover {{
+        background: rgba(0, 0, 0, 0.2);
+    }}
+
+    /* ========== 紧凑标题样式 ========== */
+    h1 {{
+        font-size: 1.5rem !important;
+        font-weight: 500 !important;
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+        padding-bottom: 0.3rem !important;
+    }}
+
+    h2 {{
+        font-size: 1.25rem !important;
+        font-weight: 500 !important;
+        margin-top: 0.3rem !important;
+        margin-bottom: 0.3rem !important;
+    }}
+
+    h3 {{
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 0.2rem !important;
+    }}
+
     /* ========== 按钮样式 ========== */
     .trigger-button {{
         background-color: {Colors.DEEP_BLUE};
