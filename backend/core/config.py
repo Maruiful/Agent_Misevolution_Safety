@@ -22,16 +22,22 @@ class LLMSettings(BaseSettings):
     """LLM配置"""
 
     provider: str = Field(default="openai", description="LLM提供商")
-    model: str = Field(default="gpt-4o", description="模型名称")
+    model: str = Field(default="glm-4", description="模型名称")
     temperature: float = Field(default=0.7, description="生成温度")
     max_tokens: int = Field(default=2000, description="最大token数")
-    api_key: str = Field(default="", description="OpenAI API密钥")
+    api_key: str = Field(default="", description="API密钥")
     api_base: str = Field(
-        default="https://api.openai.com/v1",
+        default="https://open.bigmodel.cn/api/paas/v4",
         description="API基础URL"
     )
 
-    model_config = SettingsConfigDict(env_prefix="LLM_")
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"  # 忽略额外的字段
+    )
 
     def get_model_kwargs(self) -> dict:
         """获取模型参数"""
@@ -55,7 +61,12 @@ class ExperimentSettings(BaseSettings):
         description="长期奖励权重"
     )
 
-    model_config = SettingsConfigDict(env_prefix="")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
 
 
 class LogSettings(BaseSettings):
@@ -84,7 +95,8 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False
+        case_sensitive=False,
+        extra="ignore"  # 允许额外字段，忽略不匹配的
     )
 
     @classmethod
