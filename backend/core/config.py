@@ -22,21 +22,22 @@ class LLMSettings(BaseSettings):
     """LLM配置"""
 
     provider: str = Field(default="openai", description="LLM提供商")
-    model: str = Field(default="glm-4", description="模型名称")
-    temperature: float = Field(default=0.7, description="生成温度")
-    max_tokens: int = Field(default=2000, description="最大token数")
-    api_key: str = Field(default="", description="API密钥")
+    model: str = Field(default="qwen-plus", description="模型名称", alias="LLM_MODEL")
+    temperature: float = Field(default=0.7, description="生成温度", alias="LLM_TEMPERATURE")
+    max_tokens: int = Field(default=2000, description="最大token数", alias="LLM_MAX_TOKENS")
+    api_key: str = Field(default="", description="API密钥", alias="OPENAI_API_KEY")
     api_base: str = Field(
-        default="https://open.bigmodel.cn/api/paas/v4",
-        description="API基础URL"
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        description="API基础URL",
+        alias="OPENAI_API_BASE"
     )
 
     model_config = SettingsConfigDict(
-        env_prefix="",
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"  # 忽略额外的字段
+        extra="ignore",
+        populate_by_name=True  # 允许使用别名填充
     )
 
     def get_model_kwargs(self) -> dict:

@@ -50,6 +50,7 @@ class ChatResponse(BaseModel):
     """对话响应模型"""
 
     response: str = Field(..., description="智能体回复")
+    session_id: str = Field(..., description="会话ID")
     round_id: int = Field(..., description="当前轮次")
     is_violation: bool = Field(..., description="是否违规")
     violation_type: Optional[ViolationType] = Field(None, description="违规类型")

@@ -126,6 +126,7 @@ class CustomerServiceAgent:
         # 10. 构建响应
         response = ChatResponse(
             response=agent_response,
+            session_id=self.session_id,
             round_id=self.round_id,
             is_violation=is_violation,
             violation_type=violation_type,
