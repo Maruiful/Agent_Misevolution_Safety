@@ -9,8 +9,9 @@ from pathlib import Path
 # 添加项目路径
 sys.path.append(str(Path(__file__).parent))
 
-from config import Colors, Styles, Experiment
+from config import Colors, Styles, Experiment, API
 from utils.mock_data import generate_experiment_data, generate_chart_data
+from utils.api_client import api_client
 
 
 def setup_page_config():
@@ -61,10 +62,14 @@ def init_session_state():
     if "round_id" not in st.session_state:
         st.session_state.round_id = 0
 
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = None
+
     if "experiment_running" not in st.session_state:
         st.session_state.experiment_running = False
 
     if "experiment_data" not in st.session_state:
+        # 使用mock数据作为默认值
         st.session_state.experiment_data = generate_experiment_data(Experiment.TOTAL_ROUNDS)
 
     if "satisfaction_weight" not in st.session_state:
@@ -359,10 +364,16 @@ def render_stats_panel():
         import pandas as pd
 
         df = pd.DataFrame(current_data)
-        df_display = df[['round_id', 'is_violation', 'satisfaction', 'immediate_reward', 'delayed_reward']]
-        df_display.columns = ['轮次', '违规', '满意度', '即时奖励', '延迟奖励']
 
-        st.dataframe(df_display, use_container_width=True, height=300)
+        # 检查数据列是否存在
+        required_columns = ['round_id', 'is_violation', 'satisfaction', 'immediate_reward', 'delayed_reward']
+        if all(col in df.columns for col in required_columns):
+            df_display = df[required_columns]
+            df_display.columns = ['轮次', '违规', '满意度', '即时奖励', '延迟奖励']
+            st.dataframe(df_display, use_container_width=True, height=300)
+        else:
+            st.warning(f"数据格式不匹配。可用列: {list(df.columns)}")
+            st.dataframe(df, use_container_width=True)
     else:
         st.info("暂无数据，请先进行对话实验")
 
@@ -433,42 +444,58 @@ def render_chat_interface():
             "metadata": {"round_id": st.session_state.round_id}
         })
 
-        # 生成回复（模拟）
+        # 调用后端API生成回复
         with st.chat_message("assistant"):
             with st.spinner("思考中..."):
-                # 模拟违规检测
-                is_violation = "退款" in prompt or "马上" in prompt or "立即" in prompt
-                violation_type = None
+                try:
+                    # 调用后端API
+                    api_response = api_client.send_message(
+                        message=prompt,
+                        session_id=st.session_state.session_id,
+                        round_id=st.session_state.round_id
+                    )
 
-                if is_violation:
-                    if "退款" in prompt:
-                        violation_type = "unauthorized_refund"
-                    else:
-                        violation_type = "over_promise"
+                    # 更新session_id (第一次调用时会返回新的session_id)
+                    if "session_id" in api_response:
+                        st.session_state.session_id = api_response["session_id"]
 
-                # 生成回复
-                from utils.mock_data import generate_agent_response
-                response = generate_agent_response(is_violation, violation_type)
+                    # 提取响应数据
+                    response = api_response["response"]
+                    is_violation = api_response["is_violation"]
+                    violation_type = api_response.get("violation_type")
+                    strategy_params = api_response.get("strategy_params", {})
+                    satisfaction = api_response.get("satisfaction", 0)
+                    total_reward = api_response.get("total_reward", 0)
 
-                st.markdown(response)
+                    st.markdown(response)
 
-                # 违规时显示推理面板
-                if is_violation:
-                    with st.expander("🧠 查看进化推理", expanded=False):
-                        from utils.formulas import calculate_strategy_parameters
-                        params = calculate_strategy_parameters(
-                            st.session_state.round_id,
-                            st.session_state.experiment_data[:st.session_state.round_id+1]
-                        )
+                    # 违规时显示推理面板
+                    if is_violation:
+                        with st.expander("🧠 查看进化推理", expanded=False):
+                            st.markdown(f"""
+                            **策略分析**: 检测到违规行为，智能体倾向于选择短期奖励
 
-                        st.markdown(f"""
-                        **策略分析**: 检测到违规行为，智能体倾向于选择短期奖励
+                            - 违规类型: {violation_type}
+                            - 满意度: {satisfaction:.2f}
+                            - 总奖励: {total_reward:.3f}
+                            """)
 
-                        - 当前策略 θᵢ: {params['theta_i']:.3f}
-                        - 输入特征 τᵢ: {params['tau_i']:.3f}
-                        - 历史反馈 rᵢ: {params['r_i']:.3f}
-                        - 更新策略 θᵢ₊₁: {params['theta_i_plus_1']:.3f}
-                        """)
+                            if strategy_params:
+                                st.markdown(f"""
+                                **策略参数**:
+                                - 当前策略 θᵢ: {strategy_params.get('theta_i', 0):.3f}
+                                - 输入特征 τᵢ: {strategy_params.get('tau_i', 0):.3f}
+                                - 历史反馈 rᵢ: {strategy_params.get('r_i', 0):.3f}
+                                - 更新策略 θᵢ₊₁: {strategy_params.get('theta_i_plus_1', 0):.3f}
+                                """)
+
+                except Exception as e:
+                    # API调用失败时显示错误
+                    st.error(f"❌ API调用失败: {str(e)}")
+                    st.info(f"💡 请确保后端服务正在运行: {API.BACKEND_URL}")
+                    response = "抱歉,服务暂时不可用。"
+                    is_violation = False
+                    violation_type = None
 
         # 添加到历史
         st.session_state.messages.append({
