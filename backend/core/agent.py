@@ -88,23 +88,38 @@ class CustomerServiceAgent:
         # 2. 违规检测
         is_violation, violation_type = self._detect_violation(user_input, agent_response)
 
-        # 3. 模拟满意度评分（实际应用中应该由用户给出）
-        satisfaction = self._simulate_satisfaction(
-            user_input, agent_response, is_violation
-        )
-
-        # 4. 计算奖励
+        # 3. 计算即时奖励(只使用立即可见的指标)
+        # 延迟反馈模式:不使用满意度,因为满意度是延迟反馈
+        conversation_length = len(agent_response)
         rewards = self._calculate_rewards(
-            satisfaction=satisfaction,
+            response_time=response_time,
+            conversation_length=conversation_length,
+            satisfaction=None,  # 延迟反馈,初始时未知
             is_violation=is_violation,
             violation_type=violation_type,
-            response_time=response_time,
+        )
+
+        # 4. 模拟满意度评分（实际应用中应该由用户给出,作为延迟反馈）
+        satisfaction = self._simulate_satisfaction(
+            user_input, agent_response, is_violation
         )
 
         # 5. 计算策略参数
         strategy_params = self._calculate_strategy()
 
-        # 6. 创建实验数据
+        # 6. 更新延迟奖励(当满意度已知时)
+        # 在实际应用中,这应该通过API延迟调用
+        if satisfaction is not None:
+            updated_rewards = reward_service.update_delayed_reward(
+                previous_immediate_reward=rewards["immediate_reward"],
+                satisfaction=satisfaction,
+                is_violation=is_violation,
+                violation_type=violation_type,
+                historical_violation_rate=0.0  # 简化处理
+            )
+            rewards.update(updated_rewards)
+
+        # 7. 创建实验数据
         experiment_data = self._create_experiment_data(
             user_input=user_input,
             agent_response=agent_response,
@@ -115,16 +130,16 @@ class CustomerServiceAgent:
             strategy_params=strategy_params,
         )
 
-        # 7. 保存到经验回放缓冲区
+        # 8. 保存到经验回放缓冲区
         self._save_to_replay_buffer(experiment_data)
 
-        # 8. 保存到实验数据存储
+        # 9. 保存到实验数据存储
         experiment_storage.add(experiment_data)
 
-        # 9. 更新会话上下文
+        # 10. 更新会话上下文
         self._update_context(user_input, agent_response, is_violation, violation_type)
 
-        # 10. 构建响应
+        # 11. 构建响应
         response = ChatResponse(
             response=agent_response,
             session_id=self.session_id,
@@ -139,7 +154,7 @@ class CustomerServiceAgent:
             timestamp=datetime.now(),
         )
 
-        # 11. 增加轮次
+        # 12. 增加轮次
         self.round_id += 1
 
         logger.info(
@@ -267,19 +282,21 @@ class CustomerServiceAgent:
 
     def _calculate_rewards(
         self,
-        satisfaction: float,
-        is_violation: bool,
-        violation_type: Optional[ViolationType],
         response_time: float,
+        conversation_length: int,
+        satisfaction: Optional[float] = None,
+        is_violation: bool = False,
+        violation_type: Optional[ViolationType] = None,
     ) -> Dict[str, float]:
         """
-        计算奖励
+        计算奖励(延迟反馈模式)
 
         Args:
-            satisfaction: 满意度
+            response_time: 响应时间
+            conversation_length: 对话长度
+            satisfaction: 满意度(可选,延迟反馈)
             is_violation: 是否违规
             violation_type: 违规类型
-            response_time: 响应时间
 
         Returns:
             奖励字典
@@ -292,14 +309,15 @@ class CustomerServiceAgent:
         else:
             historical_violation_rate = 0.0
 
-        # 使用奖励服务计算
+        # 使用奖励服务计算(延迟反馈模式)
         rewards = reward_service.calculate_all_rewards(
-            satisfaction=satisfaction,
+            response_time=response_time,
+            ticket_closed=False,  # 默认工单未关闭
+            conversation_length=conversation_length,
+            satisfaction=satisfaction,  # 可选的延迟反馈
             is_violation=is_violation,
             violation_type=violation_type,
-            historical_violation_rate=historical_violation_rate,
-            response_time=response_time,
-            resolution_success=True,
+            historical_violation_rate=historical_violation_rate
         )
 
         return rewards
@@ -455,6 +473,63 @@ class CustomerServiceAgent:
         self.replay_buffer.clear()
 
         logger.info(f"会话已重置 - 会话ID: {self.session_id}")
+
+    async def submit_delayed_feedback(
+        self,
+        round_id: int,
+        satisfaction: float,
+        is_violation: bool,
+        violation_type: Optional[ViolationType] = None,
+    ) -> Dict[str, float]:
+        """
+        提交延迟反馈并更新奖励
+
+        用于接收到延迟反馈(如满意度评分)时更新经验
+
+        Args:
+            round_id: 轮次ID
+            satisfaction: 满意度评分 (1-5)
+            is_violation: 是否违规
+            violation_type: 违规类型
+
+        Returns:
+            更新后的奖励字典
+        """
+        # 获取历史违规率
+        history = experiment_storage.get_all()
+        if history:
+            violations = sum(1 for exp in history if exp.is_violation)
+            historical_violation_rate = violations / len(history)
+        else:
+            historical_violation_rate = 0.0
+
+        # 查找对应的经验数据
+        exp_data = None
+        for exp in experiment_storage.get_all():
+            if exp.round_id == round_id:
+                exp_data = exp
+                break
+
+        if exp_data is None:
+            raise ValueError(f"未找到轮次 {round_id} 的经验数据")
+
+        # 更新延迟奖励
+        updated_rewards = reward_service.update_delayed_reward(
+            previous_immediate_reward=exp_data.immediate_reward,
+            satisfaction=satisfaction,
+            is_violation=is_violation,
+            violation_type=violation_type,
+            historical_violation_rate=historical_violation_rate
+        )
+
+        logger.info(
+            f"[延迟反馈] 更新轮次 {round_id} 奖励 - "
+            f"满意度: {satisfaction}, "
+            f"延迟奖励: {updated_rewards['delayed_reward']:.3f}, "
+            f"总奖励: {updated_rewards['total_reward']:.3f}"
+        )
+
+        return updated_rewards
 
 
 # ==================== 全局智能体管理 ====================
