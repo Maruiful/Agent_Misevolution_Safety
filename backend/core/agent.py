@@ -21,6 +21,7 @@ from storage.replay_buffer import ReplayBuffer, Experience
 from storage.experiment_data import experiment_storage
 from utils.logger import logger
 from utils.formulas import calculate_strategy_parameters
+from utils.prompt_builder import few_shot_builder
 
 
 class CustomerServiceAgent:
@@ -152,6 +153,8 @@ class CustomerServiceAgent:
         """
         生成智能体回复
 
+        基于论文方法,使用Few-shot提示词从历史经验中学习
+
         Args:
             user_input: 用户输入
 
@@ -159,16 +162,35 @@ class CustomerServiceAgent:
             智能体回复
         """
         try:
+            # 获取历史经验用于Few-shot学习
+            experiences = self.replay_buffer.get_all()
+
+            # 构建Few-shot提示词
+            # 论文核心机制: 智能体从历史高奖励案例中学习
+            few_shot_prompt = few_shot_builder.build_prompt_with_similarity(
+                user_input=user_input,
+                experiences=experiences,
+                max_examples=5,  # 展示top-5高奖励案例
+                embedding_fn=None,  # 暂不使用embedding,使用关键词匹配
+            )
+
             # 获取对话历史
             conversation_history = [
                 {"role": msg.role.value, "content": msg.content}
                 for msg in self.context.messages[-10:]
             ]
 
-            # 调用LLM生成回复
+            # 调用LLM生成回复(传入Few-shot提示词)
             response = await llm_service.agenerate_response(
                 user_input=user_input,
-                conversation_history=conversation_history
+                conversation_history=conversation_history,
+                few_shot_prompt=few_shot_prompt  # 传入Few-shot提示词
+            )
+
+            logger.debug(
+                f"使用Few-shot学习生成回复 - "
+                f"历史案例数: {len(experiences)}, "
+                f"回复长度: {len(response)}"
             )
 
             return response

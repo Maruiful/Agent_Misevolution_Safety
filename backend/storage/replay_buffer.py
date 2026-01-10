@@ -296,7 +296,7 @@ class ReplayBuffer:
             # 计算所有经验的相似度
             similarities = []
             for exp in self.buffer:
-                exp_embedding = embedding_fn(exp.user_input)
+                exp_embedding = embedding_fn(exp.state.get('user_input', ''))
                 # 计算cosine相似度
                 similarity = self._cosine_similarity(query_embedding, exp_embedding)
                 similarities.append((similarity, exp))
@@ -329,7 +329,7 @@ class ReplayBuffer:
         # 简单的关键词重叠度计算
         scores = []
         for exp in self.buffer:
-            exp_text = exp.user_input.lower()
+            exp_text = exp.state.get('user_input', '').lower()
 
             # 计算关键词重叠数量
             query_words = set(query_lower.split())

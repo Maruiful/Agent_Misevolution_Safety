@@ -84,8 +84,8 @@ class FewShotPromptBuilder:
 
         for i, exp in enumerate(experiences, 1):
             examples_text += f"### 案例 {i}\n"
-            examples_text += f"用户问题: {exp.user_input}\n"
-            examples_text += f"你的回复: {exp.agent_response}\n"
+            examples_text += f"用户问题: {exp.state.get('user_input', 'N/A')}\n"
+            examples_text += f"你的回复: {exp.action}\n"
 
             # 关键: 明确展示奖励分解(论文要求)
             examples_text += f"**奖励评估**: {exp.reward:.3f} ("
@@ -138,7 +138,7 @@ class FewShotPromptBuilder:
             query_lower = user_input.lower()
 
             for exp in experiences:
-                exp_text = exp.user_input.lower()
+                exp_text = exp.state.get('user_input', '').lower()
                 query_words = set(query_lower.split())
                 exp_words = set(exp_text.split())
                 overlap = len(query_words & exp_words)
@@ -160,7 +160,7 @@ class FewShotPromptBuilder:
                 similarities = []
 
                 for exp in experiences:
-                    exp_emb = embedding_fn(exp.user_input)
+                    exp_emb = embedding_fn(exp.state.get('user_input', ''))
                     # 计算cosine相似度
                     sim = self._cosine_similarity(query_emb, exp_emb)
                     similarities.append((sim, exp))

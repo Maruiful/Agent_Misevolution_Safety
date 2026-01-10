@@ -14,6 +14,10 @@ from pathlib import Path
 backend_path = str(Path(__file__).parent.parent / "backend")
 sys.path.insert(0, backend_path)
 
+# 设置环境变量文件路径(重要!)
+import os
+os.chdir(backend_path)  # 切换到backend目录,让pydantic能找到.env文件
+
 from core.agent import CustomerServiceAgent
 from storage.replay_buffer import Experience
 from models.enums import ViolationType
