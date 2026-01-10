@@ -10,7 +10,6 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from config import Colors, Styles, Experiment, API
-from utils.mock_data import generate_experiment_data, generate_chart_data
 from utils.api_client import api_client
 
 
@@ -69,8 +68,8 @@ def init_session_state():
         st.session_state.experiment_running = False
 
     if "experiment_data" not in st.session_state:
-        # 使用mock数据作为默认值
-        st.session_state.experiment_data = generate_experiment_data(Experiment.TOTAL_ROUNDS)
+        # 实验数据将从API获取
+        st.session_state.experiment_data = []
 
     if "satisfaction_weight" not in st.session_state:
         st.session_state.satisfaction_weight = Experiment.DEFAULT_LONG_TERM_WEIGHT
@@ -281,101 +280,215 @@ def render_stats_panel():
     """渲染统计监控面板"""
     st.markdown("### 📊 统计监控面板")
 
-    # 实验进度
-    col1, col2, col3 = st.columns(3)
+    # 添加刷新按钮
+    col_refresh, col1, col2, col3 = st.columns([1, 2, 2, 2])
 
+    with col_refresh:
+        if st.button("🔄 刷新数据", use_container_width=True):
+            st.rerun()
+
+    # 实验进度 - 从真实API获取
     with col1:
-        st.metric("总轮次", f"{st.session_state.round_id}/{Experiment.TOTAL_ROUNDS}")
+        if st.session_state.session_id:
+            try:
+                overview = api_client.get_overview_stats(st.session_state.session_id)
+                # overview接口直接返回ExperimentStats对象,不包装在data中
+                if isinstance(overview, dict):
+                    total_rounds = overview.get("total_rounds", overview.get("data", {}).get("total_rounds", 0))
+                else:
+                    total_rounds = getattr(overview, "total_rounds", 0)
+                st.metric("总轮次", total_rounds if total_rounds > 0 else st.session_state.round_id)
+            except Exception as e:
+                st.metric("总轮次", st.session_state.round_id)
+        else:
+            st.metric("总轮次", st.session_state.round_id)
 
     with col2:
-        current_data = st.session_state.experiment_data[:st.session_state.round_id+1] if st.session_state.round_id > 0 else []
-        if current_data:
-            violations = sum(1 for d in current_data if d.get("is_violation"))
-            violation_rate = (violations / len(current_data)) * 100
-            delta = f"{violation_rate:.1f}%"
+        if st.session_state.session_id:
+            try:
+                violations_stats = api_client.get_violations_stats(st.session_state.session_id)
+                # overview接口直接返回数据
+                if isinstance(violations_stats, dict):
+                    if "data" in violations_stats:
+                        data = violations_stats["data"]
+                        violation_rate = data.get("violation_rate", 0)
+                    else:
+                        violation_rate = violations_stats.get("violation_rate", 0)
+                else:
+                    violation_rate = getattr(violations_stats, "violation_rate", 0)
+                st.metric("违规率", f"{violation_rate:.1f}%")
+            except Exception as e:
+                st.metric("违规率", "0.0%")
         else:
-            violation_rate = 0
-            delta = "0.0%"
-        st.metric("违规率", delta)
+            st.metric("违规率", "0.0%")
 
     with col3:
-        if current_data:
-            avg_sat = sum(d["satisfaction"] for d in current_data) / len(current_data)
+        if st.session_state.session_id:
+            try:
+                # 从overview获取平均满意度
+                overview = api_client.get_overview_stats(st.session_state.session_id)
+                if isinstance(overview, dict):
+                    if "data" in overview:
+                        avg_satisfaction = overview["data"].get("avg_satisfaction", 0)
+                    else:
+                        avg_satisfaction = overview.get("avg_satisfaction", 0)
+                else:
+                    avg_satisfaction = getattr(overview, "avg_satisfaction", 0)
+                st.metric("平均满意度", f"{avg_satisfaction:.1f}⭐")
+            except Exception as e:
+                st.metric("平均满意度", "0.0⭐")
         else:
-            avg_sat = 0
-        st.metric("平均满意度", f"{avg_sat:.1f}⭐")
+            st.metric("平均满意度", "0.0⭐")
 
     st.divider()
 
-    # 演化曲线图
+    # 演化曲线图 - 从真实API获取
     st.markdown("#### 演化趋势")
 
-    from utils.mock_data import generate_chart_data
-    chart_data = generate_chart_data(st.session_state.experiment_data)
+    if st.session_state.session_id:
+        try:
+            evolution_data = api_client.get_evolution_data(st.session_state.session_id)
+            data = evolution_data.get("data", {})
 
-    import plotly.graph_objects as go
+            rounds = data.get("rounds", [])
+            satisfaction = data.get("satisfaction", [])
+            compliance_rates = data.get("compliance_rates", [])
 
-    fig = go.Figure()
+            if rounds and satisfaction:
+                import plotly.graph_objects as go
 
-    # 添加满意度曲线
-    fig.add_trace(go.Scatter(
-        x=chart_data["rounds"],
-        y=chart_data["satisfaction"],
-        mode='lines',
-        name='用户满意度',
-        line=dict(color='#00C851', width=2),
-        yaxis='y'
-    ))
+                fig = go.Figure()
 
-    # 添加合规率曲线
-    fig.add_trace(go.Scatter(
-        x=chart_data["rounds"],
-        y=chart_data["compliance_rates"],
-        mode='lines',
-        name='合规率',
-        line=dict(color='#1A2B3C', width=2),
-        yaxis='y2'
-    ))
+                # 添加满意度曲线
+                fig.add_trace(go.Scatter(
+                    x=rounds,
+                    y=satisfaction,
+                    mode='lines',
+                    name='用户满意度',
+                    line=dict(color='#00C851', width=2),
+                    yaxis='y'
+                ))
 
-    # 更新布局
-    fig.update_layout(
-        title="用户满意度 vs 合规率（负相关分析）",
-        xaxis_title="对话轮次",
-        yaxis_title="用户满意度 (1-5星)",
-        yaxis2=dict(
-            title="合规率 (%)",
-            overlaying="y",
-            side="right"
-        ),
-        hovermode='x unified',
-        template="plotly_white",
-        height=400
-    )
+                # 添加合规率曲线
+                if compliance_rates:
+                    fig.add_trace(go.Scatter(
+                        x=rounds,
+                        y=compliance_rates,
+                        mode='lines',
+                        name='合规率',
+                        line=dict(color='#1A2B3C', width=2),
+                        yaxis='y2'
+                    ))
 
-    st.plotly_chart(fig, use_container_width=True)
+                # 更新布局
+                fig.update_layout(
+                    title="用户满意度 vs 合规率（负相关分析）",
+                    xaxis_title="对话轮次",
+                    yaxis_title="用户满意度 (1-5星)",
+                    yaxis2=dict(
+                        title="合规率 (%)",
+                        overlaying="y",
+                        side="right"
+                    ),
+                    hovermode='x unified',
+                    template="plotly_white",
+                    height=400
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("暂无演化数据，请先进行对话实验")
+        except Exception as e:
+            st.error(f"获取演化数据失败: {str(e)}")
+    else:
+        st.info("💡 请先开始对话，再查看统计数据")
 
     st.divider()
 
-    # 详细数据表
+    # 策略参数信息 - 新增
+    st.markdown("#### 策略参数")
+
+    if st.session_state.session_id:
+        try:
+            strategy_info = api_client.get_strategy_info(st.session_state.session_id)
+            data = strategy_info.get("data", {})
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric(
+                    "策略漂移",
+                    f"{data.get('policy_drift', 0):.3f}"
+                )
+
+            with col2:
+                st.metric(
+                    "利润偏差",
+                    f"{data.get('profit_bias', 0):.3f}"
+                )
+
+            with col3:
+                st.metric(
+                    "当前策略",
+                    f"{data.get('current_strategy', 'N/A')}"
+                )
+
+            with col4:
+                st.metric(
+                    "演化阶段",
+                    f"{data.get('evolution_stage', 'N/A')}"
+                )
+        except Exception as e:
+            st.warning(f"获取策略信息失败: {str(e)}")
+    else:
+        st.info("💡 请先开始对话，再查看策略信息")
+
+    st.divider()
+
+    # 详细数据表 - 从真实API获取
     st.markdown("#### 详细数据")
 
-    if st.session_state.round_id > 0:
-        current_data = st.session_state.experiment_data[:st.session_state.round_id+1]
-        import pandas as pd
+    if st.session_state.session_id:
+        try:
+            experiments = api_client.get_experiments(limit=50)
 
-        df = pd.DataFrame(current_data)
+            if experiments:
+                import pandas as pd
 
-        # 检查数据列是否存在
-        required_columns = ['round_id', 'is_violation', 'satisfaction', 'immediate_reward', 'delayed_reward']
-        if all(col in df.columns for col in required_columns):
-            df_display = df[required_columns]
-            df_display.columns = ['轮次', '违规', '满意度', '即时奖励', '延迟奖励']
-            st.dataframe(df_display, use_container_width=True, height=300)
-        else:
-            st.warning(f"数据格式不匹配。可用列: {list(df.columns)}")
-            st.dataframe(df, use_container_width=True)
+                df = pd.DataFrame(experiments)
+
+                # 选择关键列显示
+                display_columns = {
+                    'round_id': '轮次',
+                    'user_input': '用户输入',
+                    'agent_response': '智能体回复',
+                    'is_violation': '是否违规',
+                    'satisfaction': '满意度',
+                    'total_reward': '总奖励'
+                }
+
+                # 只显示存在的列
+                available_columns = [col for col in display_columns.keys() if col in df.columns]
+
+                if available_columns:
+                    df_display = df[available_columns].copy()
+                    df_display.columns = [display_columns[col] for col in available_columns]
+
+                    # 截断长文本
+                    if '用户输入' in df_display.columns:
+                        df_display['用户输入'] = df_display['用户输入'].str[:50] + '...'
+                    if '智能体回复' in df_display.columns:
+                        df_display['智能体回复'] = df_display['智能体回复'].str[:100] + '...'
+
+                    st.dataframe(df_display, use_container_width=True, height=300)
+                else:
+                    st.dataframe(df, use_container_width=True)
+            else:
+                st.info("暂无实验数据，请先进行对话实验")
+        except Exception as e:
+            st.error(f"获取实验数据失败: {str(e)}")
     else:
-        st.info("暂无数据，请先进行对话实验")
+        st.info("💡 请先开始对话，再查看详细数据")
 
 
 def render_chat_interface():
