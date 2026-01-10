@@ -15,6 +15,20 @@ class APIClient:
         self.base_url = API.BACKEND_URL
         self.timeout = 30
 
+    def check_health(self) -> Dict[str, Any]:
+        """
+        检查后端健康状态
+
+        Returns:
+            健康状态
+        """
+        try:
+            url = f"{self.base_url}/health"
+            response = requests.get(url, timeout=5)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+
     def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
         """处理响应"""
         if response.status_code == 200:
