@@ -2,7 +2,7 @@
 经验回放缓冲区实现
 用于存储和管理智能体的经验数据
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from collections import deque
 import pickle
 import json
@@ -236,6 +236,209 @@ class ReplayBuffer:
                 violation_types[v_type] = violation_types.get(v_type, 0) + 1
 
         return violation_types
+
+    def retrieve_similar(
+        self,
+        query: str,
+        k: int = 5,
+        embedding_fn: Optional[callable] = None
+    ) -> List[Experience]:
+        """
+        检索与查询最相似的经验
+
+        基于论文中的k近邻检索(k-NN)方法,使用向量相似度找到历史案例
+
+        Args:
+            query: 查询文本
+            k: 返回最相似的k个经验
+            embedding_fn: 可选的embedding函数,如果不提供则使用简单的关键词匹配
+
+        Returns:
+            按相似度排序的经验列表(从最相似到最不相似)
+        """
+        if not self.buffer:
+            logger.warning("缓冲区为空,无法检索相似经验")
+            return []
+
+        if len(self.buffer) < k:
+            k = len(self.buffer)
+
+        # 如果提供了embedding函数,使用向量相似度
+        if embedding_fn is not None:
+            return self._retrieve_by_embedding(query, k, embedding_fn)
+        else:
+            # 降级方案:使用简单的关键词匹配
+            return self._retrieve_by_keywords(query, k)
+
+    def _retrieve_by_embedding(
+        self,
+        query: str,
+        k: int,
+        embedding_fn: callable
+    ) -> List[Experience]:
+        """
+        使用embedding相似度检索经验
+
+        Args:
+            query: 查询文本
+            k: 返回数量
+            embedding_fn: embedding函数
+
+        Returns:
+            按相似度排序的经验列表
+        """
+        import numpy as np
+
+        try:
+            # 计算查询的embedding
+            query_embedding = embedding_fn(query)
+
+            # 计算所有经验的相似度
+            similarities = []
+            for exp in self.buffer:
+                exp_embedding = embedding_fn(exp.user_input)
+                # 计算cosine相似度
+                similarity = self._cosine_similarity(query_embedding, exp_embedding)
+                similarities.append((similarity, exp))
+
+            # 按相似度降序排序
+            similarities.sort(key=lambda x: x[0], reverse=True)
+
+            # 返回top-k经验
+            top_experiences = [exp for _, exp in similarities[:k]]
+            logger.debug(f"使用embedding检索到 {len(top_experiences)} 条相似经验")
+            return top_experiences
+
+        except Exception as e:
+            logger.error(f"Embedding检索失败: {e}, 降级到关键词匹配")
+            return self._retrieve_by_keywords(query, k)
+
+    def _retrieve_by_keywords(self, query: str, k: int) -> List[Experience]:
+        """
+        使用关键词匹配检索经验(降级方案)
+
+        Args:
+            query: 查询文本
+            k: 返回数量
+
+        Returns:
+            按匹配度排序的经验列表
+        """
+        query_lower = query.lower()
+
+        # 简单的关键词重叠度计算
+        scores = []
+        for exp in self.buffer:
+            exp_text = exp.user_input.lower()
+
+            # 计算关键词重叠数量
+            query_words = set(query_lower.split())
+            exp_words = set(exp_text.split())
+            overlap = len(query_words & exp_words)
+
+            scores.append((overlap, exp))
+
+        # 按重叠度降序排序
+        scores.sort(key=lambda x: x[0], reverse=True)
+
+        # 返回top-k经验
+        top_experiences = [exp for _, exp in scores[:k]]
+        logger.debug(f"使用关键词匹配检索到 {len(top_experiences)} 条经验")
+        return top_experiences
+
+    def _cosine_similarity(self, vec1: list, vec2: list) -> float:
+        """
+        计算两个向量的cosine相似度
+
+        Args:
+            vec1: 向量1
+            vec2: 向量2
+
+        Returns:
+            相似度值[0, 1]
+        """
+        import numpy as np
+
+        try:
+            v1 = np.array(vec1)
+            v2 = np.array(vec2)
+
+            # 计算cosine相似度
+            dot_product = np.dot(v1, v2)
+            norm1 = np.linalg.norm(v1)
+            norm2 = np.linalg.norm(v2)
+
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+
+            similarity = dot_product / (norm1 * norm2)
+            return float(similarity)
+
+        except Exception as e:
+            logger.warning(f"计算相似度失败: {e}")
+            return 0.0
+
+    def retrieve_top_rewards(self, n: int = 5) -> List[Experience]:
+        """
+        检索奖励最高的n条经验
+
+        用于Few-shot提示词构建,优先展示成功案例
+
+        Args:
+            n: 返回数量
+
+        Returns:
+            按奖励降序排列的经验列表
+        """
+        if not self.buffer:
+            return []
+
+        if len(self.buffer) < n:
+            n = len(self.buffer)
+
+        # 按奖励排序
+        sorted_exps = sorted(
+            list(self.buffer),
+            key=lambda exp: exp.reward,
+            reverse=True
+        )
+
+        top_rewards = sorted_exps[:n]
+        logger.debug(f"检索到奖励最高的 {len(top_rewards)} 条经验")
+        return top_rewards
+
+    def retrieve_similar_top_rewards(
+        self,
+        query: str,
+        k: int = 5,
+        embedding_fn: Optional[callable] = None
+    ) -> List[Experience]:
+        """
+        检索相似经验中奖励最高的k条
+
+        结合相似度和奖励,优先展示"成功的相似案例"
+
+        Args:
+            query: 查询文本
+            k: 返回数量
+            embedding_fn: embedding函数
+
+        Returns:
+            按奖励排序的相似经验列表
+        """
+        # 先检索相似经验
+        similar_exps = self.retrieve_similar(query, k * 2, embedding_fn)
+
+        # 从相似经验中选出奖励最高的k条
+        sorted_exps = sorted(
+            similar_exps,
+            key=lambda exp: exp.reward,
+            reverse=True
+        )
+
+        top_rewards = sorted_exps[:k]
+        logger.debug(f"从相似经验中检索到奖励最高的 {len(top_rewards)} 条")
+        return top_rewards
 
 
 # ==================== 优先级经验回放缓冲区 ====================
