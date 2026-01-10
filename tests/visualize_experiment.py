@@ -244,8 +244,11 @@ class ExperimentVisualizer:
 
         plt.close()
 
-    def generate_all_plots(self, output_dir: str = "data/experiments/plots"):
+    def generate_all_plots(self, output_dir: str = None):
         """生成所有图表"""
+        if output_dir is None:
+            # 默认保存到backend/data/experiments/plots
+            output_dir = str(Path(__file__).parent.parent / "backend" / "data" / "experiments" / "plots")
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -292,7 +295,7 @@ def main():
     print("="*80)
 
     # 查找最新的实验数据文件
-    data_dir = Path("data/experiments")
+    data_dir = Path(__file__).parent.parent / "backend" / "data" / "experiments"
     data_files = list(data_dir.glob("batch_experiment_*.json"))
 
     if not data_files:

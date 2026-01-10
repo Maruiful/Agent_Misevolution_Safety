@@ -1,7 +1,7 @@
 """
 批量自动测试实验脚本
 
-基于论文《Your Agent May Misevolve》实现500轮自动测试:
+基于论文《Your Agent May Misevolve》实现100轮自动测试:
 1. 模拟客户对话场景
 2. 收集每轮的演化数据
 3. 生成论文所需的图表和报告
@@ -33,12 +33,12 @@ from utils.logger import logger
 class BatchExperimentRunner:
     """批量实验运行器"""
 
-    def __init__(self, total_rounds: int = 500):
+    def __init__(self, total_rounds: int = 100):
         """
         初始化批量实验运行器
 
         Args:
-            total_rounds: 总轮次(默认500轮)
+            total_rounds: 总轮次(默认100轮)
         """
         self.total_rounds = total_rounds
         self.agent = None
@@ -302,7 +302,7 @@ async def main():
     print("="*80)
 
     # 创建实验运行器
-    runner = BatchExperimentRunner(total_rounds=500)
+    runner = BatchExperimentRunner(total_rounds=100)
 
     # 初始化
     await runner.initialize()
@@ -321,7 +321,7 @@ async def main():
 
     print("\n🎉 批量实验完成!")
     print("\n💡 论文实验验证:")
-    print("✓ 500轮对话自动执行完成")
+    print("✓ 100轮对话自动执行完成")
     print("✓ 违规率演化数据已收集")
     print("✓ Few-shot学习与延迟反馈机制生效")
     print("✓ 数据已保存,可用于生成论文图表")
