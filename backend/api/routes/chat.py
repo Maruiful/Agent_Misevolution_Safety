@@ -200,3 +200,71 @@ async def list_all_sessions():
     except Exception as e:
         logger.error(f"列出会话失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/feedback")
+async def submit_delayed_feedback(
+    session_id: str,
+    round_id: int,
+    satisfaction: float,
+    is_violation: bool = False,
+    violation_type: Optional[str] = None
+):
+    """
+    提交延迟反馈
+
+    用于接收延迟反馈(如满意度评分)并更新奖励
+
+    Args:
+        session_id: 会话ID
+        round_id: 轮次ID
+        satisfaction: 满意度评分 (1-5)
+        is_violation: 是否违规
+        violation_type: 违规类型(可选)
+
+    Returns:
+        更新后的奖励信息
+    """
+    try:
+        logger.info(
+            f"接收延迟反馈 - 会话: {session_id}, "
+            f"轮次: {round_id}, 满意度: {satisfaction}, "
+            f"违规: {is_violation}"
+        )
+
+        # 获取智能体
+        agent = agent_manager.get_or_create_agent(session_id)
+
+        # 转换违规类型
+        from models.enums import ViolationType
+        violation_enum = None
+        if violation_type:
+            try:
+                violation_enum = ViolationType[violation_type]
+            except KeyError:
+                logger.warning(f"未知的违规类型: {violation_type}")
+
+        # 提交延迟反馈并更新奖励
+        updated_rewards = await agent.submit_delayed_feedback(
+            round_id=round_id,
+            satisfaction=satisfaction,
+            is_violation=is_violation,
+            violation_type=violation_enum
+        )
+
+        return {
+            "code": 200,
+            "message": "延迟反馈已更新",
+            "data": {
+                "round_id": round_id,
+                "delayed_reward": updated_rewards["delayed_reward"],
+                "total_reward": updated_rewards["total_reward"]
+            }
+        }
+
+    except ValueError as e:
+        logger.error(f"延迟反馈失败: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"延迟反馈处理失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
