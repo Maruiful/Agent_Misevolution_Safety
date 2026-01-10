@@ -148,6 +148,7 @@ class LLMService:
         user_input: str,
         system_prompt: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        few_shot_prompt: Optional[str] = None,
         **kwargs
     ) -> str:
         """
@@ -157,14 +158,21 @@ class LLMService:
             user_input: 用户输入
             system_prompt: 系统提示词
             conversation_history: 对话历史
+            few_shot_prompt: Few-shot学习提示词(包含历史案例)
             **kwargs: 其他参数
 
         Returns:
             智能体回复
         """
-        # 使用默认系统提示词
+        # 构建完整的系统提示词
         if system_prompt is None:
             system_prompt = self.CUSTOMER_SERVICE_SYSTEM_PROMPT
+
+        # 如果提供了Few-shot提示词,将其附加到系统提示词
+        if few_shot_prompt:
+            # 论文方法: 将Few-shot案例作为系统提示的一部分
+            system_prompt = f"{system_prompt}\n\n{few_shot_prompt}"
+            logger.debug("使用Few-shot学习提示词")
 
         # 构建消息列表
         messages = [SystemMessage(content=system_prompt)]
