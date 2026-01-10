@@ -59,6 +59,84 @@ class ExperimentVisualizer:
         """计算移动平均"""
         return np.convolve(data, np.ones(window)/window, mode='valid')
 
+    def _extract_strategy_distribution(self, strategies: List[float], bins: int = 10) -> np.ndarray:
+        """
+        从策略参数序列提取概率分布
+
+        Args:
+            strategies: 策略参数列表
+            bins: 分箱数量
+
+        Returns:
+            概率分布数组(归一化)
+        """
+        if not strategies:
+            return np.ones(bins) / bins
+
+        # 使用直方图统计策略分布
+        hist, _ = np.histogram(strategies, bins=bins, range=(0, 1), density=True)
+
+        # 避免零概率(平滑处理)
+        hist = hist + 1e-10
+        hist = hist / np.sum(hist)
+
+        return hist
+
+    def _calculate_kl_divergence(self, p_dist: np.ndarray, q_dist: np.ndarray) -> float:
+        """
+        计算KL散度 KL(P||Q)
+
+        Args:
+            p_dist: 分布P
+            q_dist: 分布Q
+
+        Returns:
+            KL散度值
+        """
+        # 确保两个分布形状一致
+        assert len(p_dist) == len(q_dist), "分布维度不一致"
+
+        # 计算KL散度: KL(P||Q) = sum(P * log(P/Q))
+        kl_div = np.sum(p_dist * np.log(p_dist / q_dist))
+
+        return float(kl_div)
+
+    def _calculate_strategy_deviation_sequence(self, window_size: int = 20) -> List[float]:
+        """
+        计算每轮的策略偏离度(相对于初始策略)
+
+        Args:
+            window_size: 滑动窗口大小,用于构建分布
+
+        Returns:
+            每轮的KL散度序列
+        """
+        rounds, _, _, _, _, _, strategies = self._parse_results()
+
+        # 计算初始策略分布(前window_size轮)
+        initial_strategies = strategies[:window_size]
+        initial_dist = self._extract_strategy_distribution(initial_strategies, bins=10)
+
+        # 计算每轮相对于初始策略的偏离度
+        deviations = []
+
+        for i in range(len(strategies)):
+            # 使用滑动窗口构建当前分布
+            start_idx = max(0, i - window_size + 1)
+            window_strategies = strategies[start_idx:i+1]
+
+            if len(window_strategies) < 5:  # 样本太少,跳过
+                deviations.append(0.0)
+                continue
+
+            current_dist = self._extract_strategy_distribution(window_strategies, bins=10)
+
+            # 计算KL散度
+            kl_div = self._calculate_kl_divergence(current_dist, initial_dist)
+            deviations.append(kl_div)
+
+        return deviations
+
     def _identify_evolution_stages(self, rounds: int = 100) -> Dict[str, Dict[str, Any]]:
         """
         识别进化阶段(基于论文假设)
@@ -301,6 +379,244 @@ class ExperimentVisualizer:
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             print(f"✓ 策略演化图已保存: {save_path}")
+        else:
+            plt.show()
+
+        plt.close()
+
+    def plot_strategy_deviation_evolution(self, save_path: str = None):
+        """
+        绘制策略偏离度演化曲线(使用KL散度)
+
+        KL散度量化当前策略相对于初始策略的偏离程度
+        """
+        rounds, violations, _, _, _, _, strategies = self._parse_results()
+
+        # 计算策略偏离度序列
+        deviations = self._calculate_strategy_deviation_sequence(window_size=20)
+
+        # 计算移动平均
+        window = 20
+        deviation_ma = self._calculate_moving_average(deviations, window)
+        rounds_ma = rounds[window-1:]
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 14))
+
+        # 子图1: 原始偏离度序列
+        ax1.plot(rounds, deviations, 'o-', markersize=2, alpha=0.5, label='KL散度', color='purple')
+        ax1.set_ylabel('KL散度', fontsize=11, fontweight='bold')
+        ax1.set_title('策略偏离度演化(原始数据)', fontsize=12, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
+
+        # 子图2: 偏离度移动平均
+        ax2.plot(rounds_ma, deviation_ma, 'purple', linewidth=2, label=f'{window}轮移动平均')
+        ax2.set_xlabel('轮次', fontsize=11, fontweight='bold')
+        ax2.set_ylabel('KL散度(平滑)', fontsize=11, fontweight='bold')
+        ax2.set_title('策略偏离度演化趋势(论文核心:策略演化量化)', fontsize=12, fontweight='bold')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
+
+        # 添加三个演化阶段标记
+        total_rounds = len(rounds)
+        stage_size = total_rounds // 3
+        ax2.axvline(x=stage_size, color='gray', linestyle='--', alpha=0.5, label='阶段分界')
+        ax2.axvline(x=2*stage_size, color='gray', linestyle='--', alpha=0.5)
+
+        # 标注阶段
+        ax2.text(stage_size/2, max(deviation_ma) * 0.9, '探索期\n(低偏离)',
+                ha='center', fontsize=10, bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+        ax2.text(stage_size * 1.5, max(deviation_ma) * 0.9, '学习期\n(偏离上升)',
+                ha='center', fontsize=10, bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.5))
+        ax2.text(stage_size * 2.5, max(deviation_ma) * 0.9, '偏离期\n(高偏离)',
+                ha='center', fontsize=10, bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.5))
+
+        # 子图3: 偏离度与策略参数对比
+        ax3_twin = ax3.twinx()
+
+        # 绘制策略参数
+        line1 = ax3.plot(rounds, strategies, 'b-', alpha=0.6, linewidth=1.5, label='策略参数 θ')
+        ax3.set_xlabel('轮次', fontsize=11, fontweight='bold')
+        ax3.set_ylabel('策略参数 θ', fontsize=11, fontweight='bold', color='blue')
+        ax3.tick_params(axis='y', labelcolor='blue')
+
+        # 绘制偏离度(移动平均)
+        line2 = ax3_twin.plot(rounds_ma, deviation_ma, 'r-', linewidth=2, label=f'KL散度({window}轮MA)')
+        ax3_twin.set_ylabel('KL散度', fontsize=11, fontweight='bold', color='red')
+        ax3_twin.tick_params(axis='y', labelcolor='red')
+
+        ax3.set_title('策略参数 vs 偏离度对比', fontsize=12, fontweight='bold')
+        ax3.grid(True, alpha=0.3)
+
+        # 合并图例
+        lines = line1 + line2
+        labels = [l.get_label() for l in lines]
+        ax3.legend(lines, labels, loc='best')
+
+        plt.suptitle('策略偏离度演化分析(基于KL散度)',
+                    fontsize=14, fontweight='bold', y=0.995)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"✓ 策略偏离度演化图已保存: {save_path}")
+        else:
+            plt.show()
+
+        plt.close()
+
+    def plot_deviation_vs_violation_correlation(self, save_path: str = None):
+        """
+        绘制策略偏离度 vs 违规率相关性分析图
+
+        验证论文假设: 策略偏离度越高,违规率越高
+        """
+        rounds, violations, _, _, _, _, strategies = self._parse_results()
+
+        # 计算偏离度序列
+        deviations = self._calculate_strategy_deviation_sequence(window_size=20)
+
+        # 计算滑动窗口违规率
+        window = 20
+        violation_rate_ma = self._calculate_moving_average(violations, window)
+        deviation_ma = self._calculate_moving_average(deviations, window)
+        rounds_ma = rounds[window-1:]
+
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+
+        # 子图1: 偏离度 vs 违规率散点图
+        scatter = ax1.scatter(deviation_ma, [v*100 for v in violation_rate_ma],
+                             c=rounds_ma, cmap='viridis', alpha=0.6, s=20)
+        ax1.set_xlabel('策略偏离度 (KL散度)', fontsize=11, fontweight='bold')
+        ax1.set_ylabel('违规率 (%)', fontsize=11, fontweight='bold')
+        ax1.set_title('策略偏离度 vs 违规率散点图', fontsize=12, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+
+        # 添加趋势线
+        if len(deviation_ma) > 0:
+            # 过滤掉NaN和Inf值
+            valid_mask = np.isfinite(deviation_ma) & np.isfinite(violation_rate_ma)
+            deviation_clean = np.array(deviation_ma)[valid_mask]
+            violation_clean = np.array(violation_rate_ma)[valid_mask]
+
+            if len(deviation_clean) > 2:
+                try:
+                    z = np.polyfit(deviation_clean, violation_clean * 100, 1)
+                    p = np.poly1d(z)
+                    x_trend = np.linspace(min(deviation_clean), max(deviation_clean), 100)
+                    ax1.plot(x_trend, p(x_trend), "r--", linewidth=2, alpha=0.8, label='趋势线')
+                    ax1.legend()
+
+                    # 计算相关系数
+                    correlation = np.corrcoef(deviation_clean, violation_clean)[0, 1]
+                    ax1.text(0.05, 0.95, f'相关系数: {correlation:.3f}',
+                            transform=ax1.transAxes, fontsize=11,
+                            verticalalignment='top',
+                            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+                except (np.linalg.LinAlgError, RuntimeWarning):
+                    # 如果仍然失败,跳过趋势线
+                    pass
+
+        # 添加颜色条
+        cbar = plt.colorbar(scatter, ax=ax1)
+        cbar.set_label('轮次', fontsize=10)
+
+        # 子图2: 时间序列对比
+        ax2.plot(rounds_ma, deviation_ma, 'purple', linewidth=2, label='策略偏离度(KL)')
+        ax2_twin = ax2.twinx()
+        ax2_twin.plot(rounds_ma, [v*100 for v in violation_rate_ma], 'r', linewidth=2, label='违规率(%)')
+
+        ax2.set_xlabel('轮次', fontsize=11, fontweight='bold')
+        ax2.set_ylabel('策略偏离度', fontsize=11, fontweight='bold', color='purple')
+        ax2_twin.set_ylabel('违规率 (%)', fontsize=11, fontweight='bold', color='red')
+        ax2.tick_params(axis='y', labelcolor='purple')
+        ax2_twin.tick_params(axis='y', labelcolor='red')
+
+        ax2.set_title('策略偏离度与违规率演化对比', fontsize=12, fontweight='bold')
+        ax2.grid(True, alpha=0.3)
+
+        # 合并图例
+        lines1, labels1 = ax2.get_legend_handles_labels()
+        lines2, labels2 = ax2_twin.get_legend_handles_labels()
+        ax2.legend(lines1 + lines2, labels1 + labels2, loc='best')
+
+        # 子图3: 分阶段统计(箱线图)
+        stage_size = len(rounds) // 3
+
+        stages_data = []
+        stage_labels = []
+
+        for i, stage_name in enumerate(['探索期', '学习期', '偏离期']):
+            start_idx = i * stage_size
+            end_idx = start_idx + stage_size if i < 2 else len(rounds)
+
+            # 确保索引在有效范围内
+            start_ma = max(0, start_idx - window + 1)
+            end_ma = min(len(deviation_ma), end_idx - window + 1)
+
+            if end_ma > start_ma:
+                stage_deviations = deviation_ma[start_ma:end_ma]
+                stages_data.append(stage_deviations)
+                stage_labels.append(stage_name)
+
+        if stages_data:
+            bp = ax3.boxplot(stages_data, labels=stage_labels, patch_artist=True)
+
+            # 设置颜色
+            colors = ['#3498db', '#f39c12', '#e74c3c']
+            for patch, color in zip(bp['boxes'], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            ax3.set_ylabel('策略偏离度 (KL散度)', fontsize=11, fontweight='bold')
+            ax3.set_title('三阶段策略偏离度分布对比', fontsize=12, fontweight='bold')
+            ax3.grid(axis='y', alpha=0.3)
+
+        # 子图4: 偏离度增长率分析
+        if len(deviation_ma) > window:
+            # 计算偏离度增长率
+            deviation_diff = np.diff(deviation_ma)
+            violation_diff = np.diff(violation_rate_ma)
+
+            # 避免除零错误
+            deviation_prev = np.array(deviation_ma[:-1]) + 1e-10
+            violation_prev = np.array(violation_rate_ma[:-1]) + 1e-10
+
+            deviation_growth_rate = deviation_diff / deviation_prev * 100
+            violation_growth_rate = violation_diff / violation_prev * 100
+
+            # 过滤有效值
+            valid_mask = np.isfinite(deviation_growth_rate) & np.isfinite(violation_growth_rate)
+            deviation_growth_clean = deviation_growth_rate[valid_mask]
+            violation_growth_clean = violation_growth_rate[valid_mask]
+
+            if len(deviation_growth_clean) > 0:
+                ax4.scatter(deviation_growth_clean, violation_growth_clean,
+                           alpha=0.5, s=20, color='green')
+                ax4.set_xlabel('偏离度增长率 (%)', fontsize=11, fontweight='bold')
+                ax4.set_ylabel('违规率增长率 (%)', fontsize=11, fontweight='bold')
+                ax4.set_title('偏离度增长率 vs 违规率增长率', fontsize=12, fontweight='bold')
+                ax4.grid(True, alpha=0.3)
+                ax4.axhline(y=0, color='black', linestyle='--', alpha=0.3)
+                ax4.axvline(x=0, color='black', linestyle='--', alpha=0.3)
+
+                # 添加象限标注
+                ax4.text(0.7, 0.9, '双重增长\n(风险区)', transform=ax4.transAxes,
+                        fontsize=10, ha='center', style='italic',
+                        bbox=dict(boxstyle='round', facecolor='red', alpha=0.3))
+                ax4.text(0.2, 0.9, '偏离上升\n违规下降', transform=ax4.transAxes,
+                        fontsize=10, ha='center', style='italic',
+                        bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.3))
+
+        plt.suptitle('策略偏离度与违规率相关性分析(论文核心验证)',
+                    fontsize=14, fontweight='bold', y=0.995)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"✓ 偏离度vs违规率相关性图已保存: {save_path}")
         else:
             plt.show()
 
@@ -726,6 +1042,15 @@ class ExperimentVisualizer:
             save_path=str(output_path / f"evolution_stages_comparison_{timestamp}.png")
         )
 
+        # 任务6: 策略偏离度量化
+        self.plot_strategy_deviation_evolution(
+            save_path=str(output_path / f"strategy_deviation_evolution_{timestamp}.png")
+        )
+
+        self.plot_deviation_vs_violation_correlation(
+            save_path=str(output_path / f"deviation_vs_violation_correlation_{timestamp}.png")
+        )
+
         # 生成阶段分析报告
         report_path = output_path / f"stage_analysis_report_{timestamp}.txt"
         self.generate_stage_analysis_report(output_path=str(report_path))
@@ -738,7 +1063,9 @@ class ExperimentVisualizer:
         print("  3. reward_decomposition - 奖励分解图(即时vs延迟)")
         print("  4. strategy_evolution - 策略参数演化")
         print("  5. evolution_stages_comparison - 三阶段对比分析(增强版)")
-        print("  6. stage_analysis_report - 详细阶段分析报告")
+        print("  6. strategy_deviation_evolution - 策略偏离度演化(任务6)")
+        print("  7. deviation_vs_violation_correlation - 偏离度vs违规率相关性(任务6)")
+        print("  8. stage_analysis_report - 详细阶段分析报告")
 
 
 def main():
