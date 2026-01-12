@@ -3,7 +3,7 @@
 处理用户对话请求
 """
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from typing import List, Optional
 from models.schemas import (
     ChatRequest,
     ChatResponse,

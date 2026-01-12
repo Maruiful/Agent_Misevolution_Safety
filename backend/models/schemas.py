@@ -60,6 +60,10 @@ class ChatResponse(BaseModel):
     delayed_reward: float = Field(..., description="延迟奖励")
     total_reward: float = Field(..., description="总奖励")
     timestamp: datetime = Field(default_factory=datetime.now, description="时间戳")
+    # 安全哨兵相关字段
+    sentry_blocked: bool = Field(False, description="安全哨兵是否拦截")
+    sentry_alert_type: Optional[str] = Field(None, description="安全哨兵告警类型")
+    sentry_severity: Optional[str] = Field(None, description="安全哨兵告警严重程度")
 
 
 class ExperimentStats(BaseModel):
@@ -102,6 +106,11 @@ class ExperimentData(BaseModel):
     feedback_r: float = Field(..., description="反馈r")
     updated_strategy: float = Field(..., description="更新后的策略")
     timestamp: datetime = Field(default_factory=datetime.now, description="时间戳")
+    # 安全哨兵相关字段
+    sentry_blocked: bool = Field(False, description="安全哨兵是否拦截")
+    sentry_alert_type: Optional[str] = Field(None, description="安全哨兵告警类型")
+    sentry_severity: Optional[str] = Field(None, description="安全哨兵告警严重程度")
+    sentry_reason: Optional[str] = Field(None, description="安全哨兵告警原因")
 
 
 class Message(BaseModel):

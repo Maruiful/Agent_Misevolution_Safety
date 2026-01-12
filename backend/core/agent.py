@@ -17,6 +17,7 @@ from services.llm_service import llm_service
 from services.reward_service import reward_service
 from services.evolution_service import evolution_tracker
 from core.detector import violation_detector
+from core.safety_sentry import SafetySentry, get_safety_sentry
 from storage.replay_buffer import ReplayBuffer, Experience
 from storage.experiment_data import experiment_storage
 from utils.logger import logger
@@ -50,12 +51,31 @@ class CustomerServiceAgent:
         # 初始化经验回放缓冲区
         self.replay_buffer = ReplayBuffer(capacity=1000)
 
+        # 初始化安全哨兵(可选)
+        self.safety_sentry: Optional[SafetySentry] = None
+        self.enable_safety_sentry = False  # 默认关闭,可通过配置启用
+
         logger.info(f"客服智能体初始化完成 - 会话ID: {self.session_id}")
 
     def _generate_session_id(self) -> str:
         """生成会话ID"""
         import uuid
         return str(uuid.uuid4())
+
+    def enable_safety_sentry_defense(self, enable: bool = True):
+        """
+        启用或禁用安全哨兵防御
+
+        Args:
+            enable: True启用,False禁用
+        """
+        self.enable_safety_sentry = enable
+        if enable:
+            self.safety_sentry = get_safety_sentry()
+            logger.info(f"安全哨兵防御已启用 - 会话: {self.session_id}")
+        else:
+            self.safety_sentry = None
+            logger.info(f"安全哨兵防御已禁用 - 会话: {self.session_id}")
 
     async def process_message(
         self,
@@ -84,6 +104,28 @@ class CustomerServiceAgent:
         start_time = datetime.now()
         agent_response = await self._generate_agent_response(user_input)
         response_time = (datetime.now() - start_time).total_seconds()
+
+        # 1.5 安全哨兵检查(如果启用)
+        sentry_blocked = False
+        sentry_alert = None
+        if self.enable_safety_sentry and self.safety_sentry:
+            sentry_alert = self.safety_sentry.check_decision(
+                agent_response=agent_response,
+                customer_query=user_input,
+                use_llm_fallback=False  # 只使用规则层,加快速度
+            )
+
+            if sentry_alert.is_violation:
+                sentry_blocked = True
+                logger.warning(
+                    f"[安全哨兵] 拦截违规回复 - 类型: {sentry_alert.violation_type}, "
+                    f"原因: {sentry_alert.reason}"
+                )
+                # 生成安全的替代方案
+                agent_response = self.safety_sentry.suggest_safe_alternative(
+                    unsafe_response=agent_response,
+                    alert=sentry_alert
+                )
 
         # 2. 违规检测
         is_violation, violation_type = self._detect_violation(user_input, agent_response)
@@ -128,6 +170,8 @@ class CustomerServiceAgent:
             satisfaction=satisfaction,
             rewards=rewards,
             strategy_params=strategy_params,
+            sentry_blocked=sentry_blocked,
+            sentry_alert=sentry_alert
         )
 
         # 8. 保存到经验回放缓冲区
@@ -151,6 +195,9 @@ class CustomerServiceAgent:
             immediate_reward=rewards["immediate_reward"],
             delayed_reward=rewards["delayed_reward"],
             total_reward=rewards["total_reward"],
+            sentry_blocked=sentry_blocked,
+            sentry_alert_type=sentry_alert.violation_type if sentry_alert else None,
+            sentry_severity=sentry_alert.severity if sentry_alert else None,
             timestamp=datetime.now(),
         )
 
@@ -348,6 +395,8 @@ class CustomerServiceAgent:
         satisfaction: float,
         rewards: Dict[str, float],
         strategy_params: StrategyParameters,
+        sentry_blocked: bool = False,
+        sentry_alert=None,
     ) -> ExperimentData:
         """
         创建实验数据
@@ -360,6 +409,8 @@ class CustomerServiceAgent:
             satisfaction: 满意度
             rewards: 奖励字典
             strategy_params: 策略参数
+            sentry_blocked: 安全哨兵是否拦截
+            sentry_alert: 安全哨兵告警对象
 
         Returns:
             实验数据对象
@@ -379,6 +430,10 @@ class CustomerServiceAgent:
             feedback_r=strategy_params.r_i,
             updated_strategy=strategy_params.theta_i_plus_1,
             timestamp=datetime.now(),
+            sentry_blocked=sentry_blocked,
+            sentry_alert_type=sentry_alert.violation_type if sentry_alert else None,
+            sentry_severity=sentry_alert.severity if sentry_alert else None,
+            sentry_reason=sentry_alert.reason if sentry_alert else None
         )
 
     def _save_to_replay_buffer(self, experiment_data: ExperimentData) -> None:
