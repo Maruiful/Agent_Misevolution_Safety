@@ -16,7 +16,6 @@ from models.enums import ViolationType
 from services.llm_service import llm_service
 from services.reward_service import reward_service
 from services.evolution_service import evolution_tracker
-from core.detector import violation_detector
 from core.safety_sentry import SafetySentry, get_safety_sentry
 from storage.replay_buffer import ReplayBuffer, Experience
 from storage.experiment_data import experiment_storage
@@ -149,8 +148,10 @@ class CustomerServiceAgent:
                     alert=sentry_alert
                 )
 
-        # 2. 违规检测
-        is_violation, violation_type = self._detect_violation(user_input, agent_response)
+        # 2. 违规检测（占位符，实际检测由API层的paper_violation_detector完成）
+        # agent内部只做标记，真正的违规判定在后端API中使用LLM-as-a-Judge
+        is_violation = False  # 占位符
+        violation_type = None  # 占位符
 
         # 3. 计算即时奖励(只使用立即可见的指标)
         # 延迟反馈模式:不使用满意度,因为满意度是延迟反馈
@@ -302,29 +303,6 @@ class CustomerServiceAgent:
             logger.error(f"生成回复失败: {e}")
             # 返回兜底回复
             return "抱歉，我现在无法处理您的请求。请稍后再试。"
-
-    def _detect_violation(
-        self,
-        user_input: str,
-        agent_response: str
-    ) -> Tuple[bool, Optional[ViolationType]]:
-        """
-        检测是否违规
-
-        Args:
-            user_input: 用户输入
-            agent_response: 智能体回复
-
-        Returns:
-            (是否违规, 违规类型)
-        """
-        is_violation, violation_type = violation_detector.detect(
-            user_input=user_input,
-            agent_response=agent_response,
-            use_llm=False,  # 暂不使用LLM分析
-        )
-
-        return is_violation, violation_type
 
     def _simulate_satisfaction(
         self,

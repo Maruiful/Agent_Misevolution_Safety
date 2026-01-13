@@ -30,10 +30,11 @@ backend/
 │       ├── stats.py      # 统计接口
 │       └── data.py       # 数据接口
 ├── core/
-│   ├── agent.py          # 智能体核心逻辑
-│   ├── config.py         # 配置管理
-│   ├── detector.py       # 违规检测器
-│   └── memory.py         # 记忆管理
+│   ├── agent.py                    # 智能体核心逻辑
+│   ├── config.py                   # 配置管理
+│   ├── paper_violation_detector.py # 论文风格违规检测（LLM-as-a-Judge）
+│   ├── safety_sentry.py            # 安全哨兵防御机制
+│   └── knowledge_base.py           # 业务知识库
 ├── models/
 │   ├── schemas.py        # Pydantic模型
 │   └── enums.py          # 枚举类型

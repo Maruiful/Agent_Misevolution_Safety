@@ -61,6 +61,15 @@ class ExperimentSettings(BaseSettings):
         default=0.3,
         description="长期奖励权重"
     )
+    # 安全哨兵配置
+    enable_safety_sentry: bool = Field(
+        default=False,
+        description="是否启用安全哨兵(可选功能,用于对比实验)"
+    )
+    safety_sentry_method: str = Field(
+        default="negative_feedback",
+        description="安全哨兵防御方法: negative_feedback(方案A)"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

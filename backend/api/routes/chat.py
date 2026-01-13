@@ -11,6 +11,7 @@ from models.schemas import (
     SessionContext,
 )
 from core.agent import agent_manager
+from core.config import settings
 from utils.logger import logger
 
 
@@ -29,7 +30,7 @@ async def chat(request: ChatRequest):
         request: 对话请求
 
     Returns:
-        对话响应（包含论文风格的违规检测）
+        对话响应（包含论文风格的违规检测和安全哨兵拦截）
     """
     try:
         logger.info(
@@ -56,6 +57,54 @@ async def chat(request: ChatRequest):
             chain_of_thought=getattr(response, 'chain_of_thought', None)
         )
 
+        # 🆕 安全哨兵拦截（可选功能，用于对比实验）
+        sentry_blocked = False
+        sentry_alert_type = None
+        sentry_severity = None
+
+        if is_violation and settings.experiment.enable_safety_sentry:
+            logger.info("[安全哨兵] 检测到违规,启用方案A: 负向反馈强制注入")
+
+            # 导入安全哨兵
+            from core.safety_sentry import SafetySentry
+
+            # 创建安全哨兵实例（已复用paper_violation_detector,不会重复检测）
+            sentry = SafetySentry()
+
+            # 构造ViolationAlert（复用已判定的结果）
+            from core.safety_sentry import ViolationAlert
+            alert = ViolationAlert(
+                is_violation=True,
+                violation_type=violation_type or "unknown",
+                severity=sentry._map_severity(violation_type),
+                reason=judge_reason,
+                suggested_fix=sentry._get_suggested_fix(violation_type),
+                confidence=0.85
+            )
+
+            # 方案A: 负向反馈强制注入
+            safe_response = await sentry.handle_violation_with_negative_feedback(
+                user_input=request.message,
+                agent_response=response.response,
+                alert=alert,
+                replay_buffer=agent.replay_buffer
+            )
+
+            # 替换为安全回复
+            original_response = response.response
+            response.response = safe_response
+
+            # 标记哨兵拦截信息
+            sentry_blocked = True
+            sentry_alert_type = alert.violation_type
+            sentry_severity = alert.severity
+
+            logger.warning(
+                f"[安全哨兵] 已拦截违规 - 类型: {alert.violation_type}, "
+                f"原回复: {original_response[:50]}..., "
+                f"安全回复: {safe_response[:50]}..."
+            )
+
         # 更新响应的违规信息（使用论文方法的判定结果）
         response.is_violation = is_violation
         if violation_type:
@@ -63,9 +112,17 @@ async def chat(request: ChatRequest):
         if judge_reason:
             response.judge_reason = judge_reason  # 添加裁判理由
 
+        # 添加哨兵拦截信息
+        response.sentry_blocked = sentry_blocked
+        if sentry_alert_type:
+            response.sentry_alert_type = sentry_alert_type
+        if sentry_severity:
+            response.sentry_severity = sentry_severity
+
         logger.info(
             f"对话请求完成 - 轮次: {response.round_id}, "
-            f"违规: {is_violation}, 奖励: {response.total_reward:.3f}, "
+            f"违规: {is_violation}, 哨兵拦截: {sentry_blocked}, "
+            f"奖励: {response.total_reward:.3f}, "
             f"裁判理由: {judge_reason[:50] if judge_reason else 'N/A'}..."
         )
 

@@ -440,6 +440,75 @@ class ReplayBuffer:
         logger.debug(f"从相似经验中检索到奖励最高的 {len(top_rewards)} 条")
         return top_rewards
 
+    def inject_negative_feedback(
+        self,
+        user_input: str,
+        unsafe_response: str,
+        safe_response: str,
+        violation_type: str,
+        judge_reason: str,
+        penalty_reward: float = -5.0  # 改为-5.0,更温和的纠正
+    ) -> Experience:
+        """
+        手动注入负向反馈到缓冲区
+
+        用于安全哨兵的方案A: 当检测到违规时,不仅拦截,还手动插入负向反馈记录
+        以纠正错误的奖励信号,重塑智能体的进化方向
+
+        奖励设计 (方案1 - 温和纠正):
+        - 违规注入: -5.0 (足够纠正1.0的错误信号,但不会过度惩罚)
+        - 合规奖励: 1.0 (鼓励安全行为)
+        - 差距: 6倍 (足以区分,避免极端对比)
+
+        Args:
+            user_input: 用户输入
+            unsafe_response: 不安全的智能体回复
+            safe_response: 安全的修正回复
+            violation_type: 违规类型
+            judge_reason: 裁判理由
+            penalty_reward: 惩罚奖励值(默认-5.0,可调整)
+
+        Returns:
+            创建的负向反馈经验
+        """
+        # 创建负向反馈经验
+        negative_experience = Experience(
+            state={
+                "user_input": user_input,
+                "round_id": 0,  # 占位符
+                "session_id": "sentry_injection"  # 标记为哨兵注入
+            },
+            action=unsafe_response,  # 记录不安全的回复
+            reward=penalty_reward,  # 负向反馈奖励值
+            next_state={
+                "user_input": user_input,
+                "safe_response": safe_response,  # 记录安全的修正方案
+                "corrected": True
+            },
+            metadata={
+                "is_violation": True,
+                "violation_type": violation_type,
+                "judge_reason": judge_reason,
+                "safe_response": safe_response,
+                "injected_by_sentry": True,  # 标记为哨兵注入
+                "original_reward": 1.0,  # 原本错误的奖励(违规但用户可能给高分)
+                "corrected_reward": penalty_reward,  # 纠正后的奖励
+                "safe_response_reward": 1.0,  # 安全回复应该获得的奖励
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+
+        # 添加到缓冲区
+        self.add(negative_experience)
+
+        logger.warning(
+            f"[安全哨兵] 注入负向反馈 - 违规类型: {violation_type}, "
+            f"惩罚奖励: {penalty_reward} (原始错误奖励: 1.0, 安全回复奖励: 1.0), "
+            f"原回复: {unsafe_response[:50]}..."
+        )
+
+        return negative_experience
+
 
 # ==================== 优先级经验回放缓冲区 ====================
 
