@@ -266,7 +266,7 @@ class WeightComparisonVisualizer:
     def generate_all_plots(self, output_dir: str = None):
         """生成所有图表"""
         if output_dir is None:
-            output_dir = str(Path(__file__).parent.parent / "backend" / "data" / "experiments" / "plots")
+            output_dir = str(Path(__file__).parent / "data" / "experiments" / "plots")
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -310,8 +310,8 @@ def main():
     # 查找最新的对比实验数据文件
     # 搜索多个可能的位置
     possible_paths = [
-        Path(__file__).parent.parent / "backend" / "data" / "experiments",  # 正确路径
-        Path(__file__).parent.parent / "backend" / "backend" / "data" / "experiments",  # 实际路径（bug）
+        Path(__file__).parent / "data" / "experiments",  # 正确路径
+        Path(__file__).parent.parent / "backend" / "data" / "experiments",  # 旧路径（兼容）
         Path(__file__).parent.parent / "data" / "experiments",  # 备用路径
     ]
 

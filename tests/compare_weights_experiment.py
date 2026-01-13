@@ -306,7 +306,7 @@ class MultiWeightExperimentRunner:
     def save_results(self, results: Dict[str, Any]):
         """保存对比实验结果"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filepath = f"backend/data/experiments/weight_comparison_{timestamp}.json"
+        filepath = f"tests/data/experiments/weight_comparison_{timestamp}.json"
 
         # 确保目录存在
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)

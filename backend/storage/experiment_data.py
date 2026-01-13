@@ -14,13 +14,20 @@ from utils.logger import logger
 class ExperimentDataStorage:
     """实验数据存储管理器"""
 
-    def __init__(self, storage_path: str = "data/experiments"):
+    def __init__(self, storage_path: str = None):
         """
         初始化实验数据存储
 
         Args:
-            storage_path: 存储路径
+            storage_path: 存储路径（默认使用相对于backend目录的路径）
         """
+        if storage_path is None:
+            # 默认保存到 tests/data/experiments
+            from pathlib import Path
+            # 获取backend目录的父目录（项目根目录）
+            backend_dir = Path(__file__).parent.parent
+            storage_path = backend_dir / "tests" / "data" / "experiments"
+
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 

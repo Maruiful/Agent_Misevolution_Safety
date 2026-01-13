@@ -236,7 +236,8 @@ class BatchExperimentRunner:
             filepath: 保存路径(可选)
         """
         if filepath is None:
-            filepath = f"data/experiments/batch_experiment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            # 保存到 tests/data/experiments
+            filepath = f"tests/data/experiments/batch_experiment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         # 确保目录存在
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)

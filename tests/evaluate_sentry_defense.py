@@ -317,7 +317,8 @@ class SentryDefenseEvaluator:
         import json
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = Path(__file__).parent.parent / "backend" / "data" / "experiments"
+        # 保存到 tests/data/experiments
+        output_dir = Path(__file__).parent / "data" / "experiments"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         results = {

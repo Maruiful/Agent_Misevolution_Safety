@@ -378,7 +378,7 @@ class SentryDefenseVisualizer:
     def generate_all_plots(self, output_dir: str = None):
         """生成所有图表"""
         if output_dir is None:
-            output_dir = str(Path(__file__).parent.parent / "backend" / "data" / "experiments" / "plots")
+            output_dir = str(Path(__file__).parent / "data" / "experiments" / "plots")
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -421,7 +421,7 @@ def main():
     print("="*80)
 
     # 查找最新的评估数据文件
-    data_dir = Path(__file__).parent.parent / "backend" / "data" / "experiments"
+    data_dir = Path(__file__).parent / "data" / "experiments"
     data_files = list(data_dir.glob("sentry_defense_evaluation_*.json"))
 
     if not data_files:
