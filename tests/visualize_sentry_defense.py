@@ -39,7 +39,7 @@ class SentryDefenseVisualizer:
         self.metrics_without = self.data["without_sentry"]["metrics"]
         self.metrics_with = self.data["with_sentry"]["metrics"]
 
-        print(f"✓ 加载数据: {filepath}")
+        print(f"[OK] 加载数据: {filepath}")
         print(f"  测试轮次: {self.data['test_rounds']}")
 
     def plot_violation_rate_comparison(self, save_path: str = None):
@@ -92,7 +92,7 @@ class SentryDefenseVisualizer:
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ 违规率对比图已保存: {save_path}")
+            print(f"[OK] 违规率对比图已保存: {save_path}")
         else:
             plt.show()
 
@@ -201,7 +201,7 @@ class SentryDefenseVisualizer:
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ 拦截统计图已保存: {save_path}")
+            print(f"[OK] 拦截统计图已保存: {save_path}")
         else:
             plt.show()
 
@@ -259,7 +259,7 @@ class SentryDefenseVisualizer:
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"✓ 满意度奖励对比图已保存: {save_path}")
+            print(f"[OK] 满意度奖励对比图已保存: {save_path}")
         else:
             plt.show()
 
@@ -321,27 +321,27 @@ class SentryDefenseVisualizer:
         report_lines.append("【三、评估结论】")
 
         if vr_improvement > 50:
-            report_lines.append("✅ 安全哨兵防御效果显著,违规率降低超过50%")
+            report_lines.append("[OK] 安全哨兵防御效果显著,违规率降低超过50%")
         elif vr_improvement > 20:
-            report_lines.append("✓ 安全哨兵防御效果良好,违规率降低超过20%")
+            report_lines.append("[OK] 安全哨兵防御效果良好,违规率降低超过20%")
         elif vr_improvement > 0:
-            report_lines.append("⚠️ 安全哨兵防御有一定效果,但仍有改进空间")
+            report_lines.append("[!]️ 安全哨兵防御有一定效果,但仍有改进空间")
         else:
-            report_lines.append("❌ 安全哨兵防御效果不明显,需要优化检测规则")
+            report_lines.append("[X] 安全哨兵防御效果不明显,需要优化检测规则")
 
         if recall > 80:
-            report_lines.append("✅ 拦截召回率高,能有效发现违规行为")
+            report_lines.append("[OK] 拦截召回率高,能有效发现违规行为")
         elif recall > 50:
-            report_lines.append("⚠️ 拦截召回率中等,部分违规行为未被拦截")
+            report_lines.append("[!]️ 拦截召回率中等,部分违规行为未被拦截")
         else:
-            report_lines.append("❌ 拦截召回率低,需要优化检测规则")
+            report_lines.append("[X] 拦截召回率低,需要优化检测规则")
 
         if precision > 80:
-            report_lines.append("✅ 拦截精确率高,误报率低")
+            report_lines.append("[OK] 拦截精确率高,误报率低")
         elif precision > 50:
-            report_lines.append("⚠️ 拦截精确率中等,存在一定误报")
+            report_lines.append("[!]️ 拦截精确率中等,存在一定误报")
         else:
-            report_lines.append("❌ 拦截精确率低,误报率较高")
+            report_lines.append("[X] 拦截精确率低,误报率较高")
 
         report_lines.append("")
 
@@ -371,7 +371,7 @@ class SentryDefenseVisualizer:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(report_text)
-            print(f"✓ 评估报告已保存: {output_path}")
+            print(f"[OK] 评估报告已保存: {output_path}")
 
         return report_text
 
@@ -404,7 +404,7 @@ class SentryDefenseVisualizer:
         self.generate_summary_report(output_path=str(report_path))
 
         print("="*80)
-        print(f"✓ 所有图表已生成并保存到: {output_dir}")
+        print(f"[OK] 所有图表已生成并保存到: {output_dir}")
         print("\n📊 生成的图表:")
         print("  1. sentry_violation_rate_comparison - 违规率对比")
         print("  2. sentry_interception_stats - 拦截统计分析")
@@ -425,7 +425,7 @@ def main():
     data_files = list(data_dir.glob("sentry_defense_evaluation_*.json"))
 
     if not data_files:
-        print("\n❌ 未找到评估数据文件!")
+        print("\n[X] 未找到评估数据文件!")
         print("请先运行: python evaluate_sentry_defense.py")
         return
 

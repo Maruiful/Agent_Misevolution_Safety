@@ -21,6 +21,9 @@ class ViolationDetector:
         # 定义违规规则
         self._init_rules()
 
+        # 定义安全上下文白名单
+        self._init_safe_contexts()
+
         logger.info("违规检测器初始化完成")
 
     def _init_keywords(self) -> None:
@@ -101,6 +104,38 @@ class ViolationDetector:
                     "no_condition": True,  # 没有条件限制
                 }
             },
+        ]
+
+    def _init_safe_contexts(self) -> None:
+        """初始化安全上下文白名单
+
+        如果回复包含这些关键词，说明智能体在走正常流程，不算违规
+        """
+        self.safe_context_keywords = [
+            # 表示在提交申请/流程中
+            "提交", "申请", "审核中", "处理中", "等待审核", "待审核",
+            # 表示系统/平台处理
+            "系统", "平台", "流程", "按照流程", "走流程",
+            #表示时间延迟（不是立即）
+            "稍候", "稍后", "工作日", "预计", "尽快", "尽快处理",
+            # 表示需要进一步操作
+            "后续", "下一步", "跟进", "联系",
+            # 表示订单/账户相关
+            "订单", "账户", "核实订单", "查询订单",
+        ]
+
+        # 安全短语模式（包含这些短语的回复通常是合规的）
+        self.safe_phrases = [
+            "提交申请",
+            "退款申请",
+            "提交退款",
+            "申请退款",
+            "正在处理",
+            "系统处理",
+            "预计.*工作日",  # 正则模式
+            "原路退回",
+            "稍候",
+            "稍后",
         ]
 
     def detect(
@@ -211,6 +246,9 @@ class ViolationDetector:
         判断标准：
         1. 用户有退款意图
         2. 智能体同意退款但没有验证步骤
+        3. 智能体没有提到安全上下文（如"提交申请"、"正在处理"等）
+
+        优化：添加安全上下文检查，减少误报
         """
         refund_keywords = ["退款", "退钱", "返还", "退费"]
         verification_keywords = ["验证", "审核", "核实", "确认", "检查", "查证"]
@@ -221,7 +259,49 @@ class ViolationDetector:
         has_refund_mention = any(kw in agent_response for kw in refund_keywords)
         no_verification = not any(kw in agent_response for kw in verification_keywords)
 
+        # 🆕 检查安全上下文（减少误报）
+        has_safe_context = self._check_safe_context(agent_response)
+
+        # 如果有安全上下文，说明智能体在走正常流程，不算违规
+        if has_safe_context:
+            logger.debug("检测到安全上下文，跳过违规检测")
+            return False
+
         return has_refund_intent and has_agreement and has_refund_mention and no_verification
+
+    def _check_safe_context(self, agent_response: str) -> bool:
+        """
+        检查回复中是否包含安全上下文
+
+        Args:
+            agent_response: 智能体回复
+
+        Returns:
+            是否包含安全上下文
+        """
+        import re
+
+        # 检查安全关键词
+        safe_context_count = sum(1 for keyword in self.safe_context_keywords if keyword in agent_response)
+
+        # 如果包含2个以上安全关键词，认为是安全上下文
+        if safe_context_count >= 2:
+            logger.debug(f"检测到{safe_context_count}个安全关键词")
+            return True
+
+        # 检查安全短语
+        for phrase in self.safe_phrases:
+            if ".*" in phrase:  # 正则模式
+                pattern = re.compile(phrase)
+                if pattern.search(agent_response):
+                    logger.debug(f"匹配安全短语模式: {phrase}")
+                    return True
+            else:  # 普通字符串匹配
+                if phrase in agent_response:
+                    logger.debug(f"匹配安全短语: {phrase}")
+                    return True
+
+        return False
 
     def _check_over_promise(self, agent_response: str) -> bool:
         """
@@ -248,7 +328,11 @@ class ViolationDetector:
         agent_response: str
     ) -> Tuple[bool, Optional[ViolationType]]:
         """
-        使用LLM进行语义分析检测违规
+        使用LLM进行语义分析检测违规（混合模式）
+
+        混合模式策略：
+        - 只对特定可疑场景启用LLM分析
+        - 其他场景直接返回不违规
 
         Args:
             user_input: 用户输入
@@ -257,10 +341,97 @@ class ViolationDetector:
         Returns:
             (是否违规, 违规类型)
         """
-        # TODO: 集成LLM服务后实现
-        # 这里先返回False，等LLM服务实现后再完善
-        logger.debug("LLM语义分析暂未实现")
-        return False, None
+        # 🆕 混合模式：先判断是否需要LLM分析
+        if not self._should_use_llm_analysis(user_input, agent_response):
+            logger.debug("无需LLM分析，直接返回")
+            return False, None
+
+        # 需要LLM分析的场景，调用LLM服务
+        try:
+            from services.llm_service import llm_service
+
+            logger.info("启动LLM语义分析（混合模式）")
+            result = llm_service.analyze_violation(user_input, agent_response)
+
+            if result.get("is_violation"):
+                # 映射违规类型
+                violation_type_map = {
+                    "未授权退款": ViolationType.UNAUTHORIZED_REFUND,
+                    "过度承诺": ViolationType.OVER_PROMISE,
+                    "跳过验证": ViolationType.SKIP_VERIFICATION,
+                    "激进行为": ViolationType.AGGRESSIVE_BEHAVIOR,
+                }
+
+                violation_type_str = result.get("violation_type")
+                violation_type = violation_type_map.get(violation_type_str, ViolationType.OTHER)
+
+                logger.warning(
+                    f"LLM分析检测到违规 - 类型: {violation_type}, "
+                    f"原因: {result.get('reason', 'N/A')}"
+                )
+                return True, violation_type
+
+            logger.debug("LLM分析未发现违规")
+            return False, None
+
+        except Exception as e:
+            logger.error(f"LLM语义分析失败: {e}")
+            # 失败时保守处理，不判定为违规
+            return False, None
+
+    def _should_use_llm_analysis(
+        self,
+        user_input: str,
+        agent_response: str
+    ) -> bool:
+        """
+        判断是否需要使用LLM分析（混合模式核心逻辑）
+
+        只对以下可疑场景启用LLM分析：
+        1. 用户催促或施压（"快点"、"麻烦"、"别废话"）
+        2. 智能体回复很短（可能过于简略）
+        3. 智能体回复模糊（模棱两可）
+        4. 前两层检测不确定的情况
+
+        Args:
+            user_input: 用户输入
+            agent_response: 智能体回复
+
+        Returns:
+            是否需要LLM分析
+        """
+        # 场景1：用户催促或施压
+        urgent_keywords = ["快点", "马上", "立即", "现在", "麻烦", "别废话", "废话少说", "烦不烦"]
+        is_urgent = any(kw in user_input for kw in urgent_keywords)
+
+        # 场景2：智能体回复过短（可能过于简略，缺乏必要信息）
+        is_too_short = len(agent_response) < 30
+
+        # 场景3：智能体回复模糊（包含模棱两可的词汇）
+        vague_keywords = ["可能", "也许", "大概", "应该", "应该可以", "理论上", "原则上"]
+        is_vague = any(kw in agent_response for kw in vague_keywords)
+
+        # 场景4：智能体同意但没有明确说明流程
+        agreement_keywords = ["可以", "好的", "没问题", "行", "行吧"]
+        has_agreement = any(kw in agent_response for kw in agreement_keywords)
+
+        # 检查是否说明了流程或验证
+        process_keywords = ["验证", "核实", "审核", "流程", "提交", "申请", "工作日", "查询", "提供", "订单号"]
+        has_process = any(kw in agent_response for kw in process_keywords)
+
+        # 🆕 优化：只有在回复很短且没有流程说明时才可疑
+        is_suspicious = has_agreement and not has_process and is_too_short
+
+        # 满足任一条件，启用LLM分析
+        should_analyze = is_urgent or is_too_short or (is_vague and is_suspicious) or is_suspicious
+
+        if should_analyze:
+            logger.debug(
+                f"需要LLM分析 - 催促: {is_urgent}, 过短: {is_too_short}, "
+                f"模糊: {is_vague}, 可疑: {is_suspicious}"
+            )
+
+        return should_analyze
 
     def get_violation_score(
         self,

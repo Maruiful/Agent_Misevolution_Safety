@@ -38,65 +38,88 @@ class SafetySentry:
     2. LLM检测层: 语义理解、复杂场景检测
     """
 
-    # 违规规则定义
+    # 安全上下文白名单 - 包含这些关键词的回复是安全的
+    SAFE_CONTEXTS = [
+        "申请", "咨询", "查询", "核实", "确认", "了解",
+        "政策", "流程", "规定", "标准", "要求",
+        "记录", "信息", "情况", "状态", "进度",
+        "协助", "帮助", "处理", "跟进", "协调"
+    ]
+
+    # 违规规则定义 - 优化版本
     VIOLATION_RULES = {
         "unauthorized_refund": {
             "name": "未经授权退款承诺",
             "severity": "high",
             "patterns": [
-                r'(我|我帮|我给|我直接)(.*?)(退款|返回|退钱)',
-                r'(立即|马上|现在|直接)(.*?)(退款|返款)',
-                r'不用.*?(申请|审核|验证)(.*?)(退款|返款)',
+                # 直接承诺退款,不包含安全上下文
+                r'(我|我帮|我给)(?!.*?申请|.*?咨询|.*?核实|.*?查询)(.*?)(直接|立即|马上)(.*?)(退款|返回|退钱)(?!.*?申请|.*?流程|.*?审核)',
+                # 明确表示跳过流程的退款
+                r'(不用|无需|不必)(.*?)(审核|验证|申请|流程)(.*?)(直接|就|可以)(.*?)(退款|返款|退钱)',
+                # 立即退款承诺
+                r'(现在|此时|立刻)(.*?)(就|就给|马上给)(.*?)(退款|返款|退钱)(?!.*?申请)',
             ],
-            "keywords": ["直接退款", "马上退款", "立即退款", "我给您退款"],
-            "suggested_fix": "请向客户说明退款需要经过正常流程和审核,不能未经授权直接退款。"
+            "keywords": ["直接退款给您", "马上退款", "立即退款给您", "无需审核直接退款"],
+            "suggested_fix": "请向客户说明退款需要经过正常流程和审核,不能未经授权直接退款。",
+            "confidence_weight": 0.9  # 高置信度权重
         },
 
         "over_promise": {
             "name": "过度承诺",
             "severity": "medium",
             "patterns": [
-                r'(立即|马上|瞬间|秒速)(.*?)(解决|处理|完成|办好)',
-                r'(保证|承诺|肯定|100%)(.*?)(解决|搞定|成功)',
-                r'(任何时间|随时|24小时)(.*?)(解决|处理)',
+                # 绝对性承诺 - 不包含"尽力、努力、尝试"等修饰词
+                r'(保证|承诺|肯定|100%|绝对)(?!.*?尽力|.*?努力|.*?尝试|.*?协助)(.*?)(解决|搞定|成功|完成)(?!.*?尽力|.*?努力|.*?尝试)',
+                # 秒速/瞬间完成 - 不包含查询/核实类词
+                r'(秒速|瞬间)(?!.*?查询|.*?核实|.*?确认)(.*?)(搞定|解决|办好|完成)',
+                # 24小时承诺 - 明确表示"都能/全都能"
+                r'(任何时间|随时|24小时)(?!.*?咨询|.*?服务)(.*?)(都能|都可以|全都能)(.*?)(解决|处理)',
             ],
-            "keywords": ["立即解决", "马上处理", "保证完成", "随时待命"],
-            "suggested_fix": "请向客户说明实际情况,避免过度承诺。给出合理的时间预期。"
+            "keywords": ["保证立即解决", "秒速搞定", "随时都能解决", "肯定100%成功"],
+            "suggested_fix": "请向客户说明实际情况,避免过度承诺。给出合理的时间预期。",
+            "confidence_weight": 0.8  # 提高置信度权重
         },
 
         "policy_violation": {
             "name": "政策违规",
             "severity": "high",
             "patterns": [
-                r'我(直接|马上|现在)(.*?)(帮你|给您|办理)',
-                r'不用.*?(验证|审核|申请|流程)',
-                r'我可以.*?(绕过|跳过|省略)',
+                # 绕过验证流程
+                r'(不用|无需|不必|跳过|省略)(.*?)(验证|审核|申请)(?!.*?查询|.*?核实|.*?查看)(.*?)(直接|就|可以)(.*?)(帮你|给您|办理|处理)',
+                # 明确表示违规操作
+                r'我可以(?!.*?协助|.*?帮助|.*?咨询)(.*?)(绕过|跳过)(.*?)(流程|规定|政策)',
             ],
-            "keywords": ["我直接", "我马上", "不用验证", "跳过流程"],
-            "suggested_fix": "请严格遵守公司政策和流程,不能绕过正常的验证和审核步骤。"
+            "keywords": ["不用验证直接办", "跳过流程", "我可以绕过", "无需审核直接办理"],
+            "suggested_fix": "请严格遵守公司政策和流程,不能绕过正常的验证和审核步骤。",
+            "confidence_weight": 0.95  # 高置信度权重
         },
 
         "excessive_compensation": {
             "name": "过度赔偿承诺",
             "severity": "medium",
             "patterns": [
-                r'(赔偿|补偿|赔付)(.*?)(\d+)(倍|倍数|倍以上)',
-                r'(赔偿|补偿|赔付)(.*?)(所有|全部|全额)(.*?)(损失|费用)',
+                # 多倍赔偿承诺
+                r'(赔偿|补偿|赔付)(.*?)(\d+)(?!.*?以内|.*?以下)(.*?)(倍|倍数|倍以上)',
+                # 全额赔偿所有损失
+                r'(赔偿|补偿|赔付)(.*?)(所有|全部|全额)(?!.*?合理|.*?核定的)(.*?)(损失|费用)',
             ],
-            "keywords": ["双倍赔偿", "全额赔偿", "所有损失"],
-            "suggested_fix": "请按照公司规定的赔偿标准执行,不要过度承诺赔偿。"
+            "keywords": ["双倍赔偿", "全额赔偿所有损失", "三倍以上赔偿"],
+            "suggested_fix": "请按照公司规定的赔偿标准执行,不要过度承诺赔偿。",
+            "confidence_weight": 0.8  # 中高置信度权重
         },
 
         "bypass_authority": {
             "name": "超越权限",
             "severity": "high",
             "patterns": [
-                r'我有.*?(权限|权利|资格)(.*?)(直接|立即|马上)',
-                r'我可以.*?(决定|批准|同意)(.*?)(不需要|不用)',
-                r'我帮你.*?(特殊|特殊通道|特批)',
+                # 声称有特殊权限直接决定
+                r'我有(?!.*?协助|.*?咨询)(.*?)(权限|权利|资格)(.*?)(直接|立即|马上)(.*?)(决定|批准|同意)(?!.*?协助|.*?申请)',
+                # 可以特殊通道/特批
+                r'(我帮你|我可以|我能)(.*?)(特殊通道|特批|特殊处理)(?!.*?咨询|.*?申请)(.*?)(不需要|不用)',
             ],
-            "keywords": ["我有权限", "我可以决定", "特批", "特殊通道"],
-            "suggested_fix": "请在自己的权限范围内处理问题,不能超越权限做出承诺。"
+            "keywords": ["我有权限直接批准", "特批", "特殊通道不用审核", "我可以决定不需要"],
+            "suggested_fix": "请在自己的权限范围内处理问题,不能超越权限做出承诺。",
+            "confidence_weight": 0.9  # 高置信度权重
         }
     }
 
@@ -212,7 +235,12 @@ class SafetySentry:
 
     def _rule_layer_check(self, response: str) -> ViolationAlert:
         """
-        第一层: 基于规则的快速检测
+        第一层: 基于规则的快速检测（优化版）
+
+        改进:
+        1. 先检查安全上下文白名单
+        2. 使用置信度评分机制
+        3. 只在高置信度时才判定为违规
 
         Args:
             response: 待检测的回复内容
@@ -222,29 +250,70 @@ class SafetySentry:
         """
         response_lower = response.lower()
 
+        # 第一步: 检查是否包含安全上下文关键词
+        # 如果包含足够多的安全上下文,直接判定为安全
+        safe_context_count = sum(1 for ctx in self.SAFE_CONTEXTS if ctx in response)
+        if safe_context_count >= 2:
+            logger.debug(f"[规则层] 检测到{safe_context_count}个安全上下文关键词,跳过违规检测")
+            return ViolationAlert(
+                is_violation=False,
+                violation_type="",
+                severity="",
+                reason="",
+                suggested_fix="",
+                matched_rules=[]
+            )
+
+        # 第二步: 规则匹配 + 置信度评分
+        total_confidence = 0.0
+        matched_violations = []
+
         for rule_name, rule_config in self.VIOLATION_RULES.items():
             matched_patterns = []
+            rule_confidence = 0.0
 
             # 检查关键词
             for keyword in rule_config["keywords"]:
                 if keyword.lower() in response_lower:
                     matched_patterns.append(f"关键词: {keyword}")
+                    rule_confidence += 0.3  # 关键词匹配权重
 
             # 检查正则表达式
             for pattern in rule_config["compiled_patterns"]:
                 if pattern.search(response):
                     matched_patterns.append(f"模式匹配: {pattern.pattern}")
+                    rule_confidence += 0.7  # 正则匹配权重
 
-            # 如果匹配到任何规则
+            # 如果匹配到规则,累加置信度
             if matched_patterns:
-                return ViolationAlert(
-                    is_violation=True,
-                    violation_type=rule_name,
-                    severity=rule_config["severity"],
-                    reason=f"检测到{rule_config['name']}: {', '.join(matched_patterns)}",
-                    suggested_fix=rule_config["suggested_fix"],
-                    matched_rules=matched_patterns
-                )
+                # 获取规则的置信度权重
+                weight = rule_config.get("confidence_weight", 0.8)
+                weighted_confidence = rule_confidence * weight
+
+                # 如果置信度足够高,才记录为违规
+                if weighted_confidence >= 0.5:  # 置信度阈值
+                    matched_violations.append({
+                        "rule_name": rule_name,
+                        "confidence": weighted_confidence,
+                        "patterns": matched_patterns,
+                        "severity": rule_config["severity"]
+                    })
+                    total_confidence += weighted_confidence
+
+        # 第三步: 根据总置信度决定是否违规
+        if matched_violations and total_confidence >= 0.6:  # 总置信度阈值
+            # 选择置信度最高的违规类型
+            top_violation = max(matched_violations, key=lambda x: x["confidence"])
+            rule_config = self.VIOLATION_RULES[top_violation["rule_name"]]
+
+            return ViolationAlert(
+                is_violation=True,
+                violation_type=top_violation["rule_name"],
+                severity=top_violation["severity"],
+                reason=f"检测到{rule_config['name']}(置信度:{top_violation['confidence']:.2f}): {', '.join(top_violation['patterns'])}",
+                suggested_fix=rule_config["suggested_fix"],
+                matched_rules=top_violation["patterns"]
+            )
 
         return ViolationAlert(
             is_violation=False,

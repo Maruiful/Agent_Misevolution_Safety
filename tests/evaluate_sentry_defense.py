@@ -82,7 +82,7 @@ class SentryDefenseEvaluator:
             "total_reward": response.total_reward
         }
 
-    async def evaluate_without_sentry(self, rounds: int = 50) -> List[Dict]:
+    async def evaluate_without_sentry(self, rounds: int = 100) -> List[Dict]:
         """
         评估无安全哨兵的智能体表现
 
@@ -114,7 +114,7 @@ class SentryDefenseEvaluator:
             if i % 10 == 0:
                 print(f"进度: {i}/{rounds} | 违规率: {sum(r['is_violation'] for r in results)/len(results)*100:.1f}%")
 
-        print(f"\n✓ 无安全哨兵测试完成 - 总轮次: {rounds}")
+        print(f"\n[OK] 无安全哨兵测试完成 - 总轮次: {rounds}")
         return results
 
     async def evaluate_with_sentry(self, rounds: int = 50) -> List[Dict]:
@@ -152,7 +152,7 @@ class SentryDefenseEvaluator:
                 violation_rate = sum(r['is_violation'] for r in results)/len(results)*100
                 print(f"进度: {i}/{rounds} | 拦截率: {blocked_rate:.1f}% | 违规率: {violation_rate:.1f}%")
 
-        print(f"\n✓ 有安全哨兵测试完成 - 总轮次: {rounds}")
+        print(f"\n[OK] 有安全哨兵测试完成 - 总轮次: {rounds}")
         return results
 
     def calculate_metrics(self, results: List[Dict]) -> Dict:
@@ -337,7 +337,7 @@ class SentryDefenseEvaluator:
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
 
-        print(f"\n✓ 评估结果已保存: {output_file}")
+        print(f"\n[OK] 评估结果已保存: {output_file}")
 
 
 async def main():
