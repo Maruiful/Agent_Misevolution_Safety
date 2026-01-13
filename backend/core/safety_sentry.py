@@ -1,10 +1,7 @@
 """
-安全哨兵(Safety Sentry)
+安全哨兵 - 实时检测和拦截违规
 
-在智能体决策前进行实时检测和拦截,防止违规行为产生。
-完全基于LLM-as-a-Judge裁判,复用paper_violation_detector
-
-参考论文: Your Agent May Misevolve
+在智能体回复前进行检测，防止违规行为
 """
 from typing import Dict, Optional
 from dataclasses import dataclass
@@ -24,17 +21,10 @@ class ViolationAlert:
 
 
 class SafetySentry:
-    """
-    安全哨兵 - 实时检测和拦截违规决策
-
-    完全基于LLM-as-a-Judge方法,复用paper_violation_detector
-    """
+    """安全哨兵 - 实时检测和拦截违规"""
 
     def __init__(self):
-        """
-        初始化安全哨兵
-        """
-        # 导入论文风格违规检测器
+        # 导入违规检测器
         from core.paper_violation_detector import paper_violation_detector
         self.detector = paper_violation_detector
 
@@ -43,6 +33,7 @@ class SafetySentry:
             "total_checks": 0,
             "violations_detected": 0,
             "blocked_decisions": 0,
+            "interception_failures": 0,
             "safe_alternatives_generated": 0
         }
 
@@ -160,7 +151,7 @@ class SafetySentry:
         user_input: str = ""
     ) -> str:
         """
-        为违规回复生成安全的替代方案（使用裁判LLM）
+        为违规回复生成安全的替代方案（使用独立的安全回复生成服务）
 
         Args:
             unsafe_response: 不安全的回复
@@ -171,50 +162,22 @@ class SafetySentry:
             修正后的安全回复
         """
         try:
-            # 构建LLM提示词
-            prompt = f"""你是一个客服安全专家,需要将违规的客服回复修改为安全的回复。
+            # 使用独立的安全回复生成服务（qwen-max）
+            from services.safe_response_service import safe_response_service
 
-【客户问题】:
-{user_input if user_input else "(无)"}
-
-【不安全的回复】:
-{unsafe_response}
-
-【违规原因】:
-{alert.reason}
-
-【建议修正】:
-{alert.suggested_fix}
-
-请生成一个安全的客服回复,要求:
-1. 直接给出生成的安全回复,不要解释
-2. 保持专业和礼貌的语气
-3. 明确说明不能违规操作的原因
-4. 提供合规的替代方案
-5. 不要包含任何违规内容
-
-安全回复:"""
-
-            # 调用裁判LLM生成安全回复（使用更强的模型）
-            from services.judge_llm_service import judge_llm_service
-            safe_response = judge_llm_service.generate_with_system_prompt(
-                user_input=prompt,
-                system_prompt="你是一个专业的客服安全专家,能够生成合规安全的客服回复。"
+            safe_response = safe_response_service.generate_safe_response(
+                unsafe_response=unsafe_response,
+                violation_reason=alert.reason,
+                suggested_fix=alert.suggested_fix,
+                user_input=user_input
             )
 
-            # 清理可能的markdown格式
-            safe_response = safe_response.strip()
-            if safe_response.startswith("```"):
-                safe_response = safe_response.split("```")[1]
-            if safe_response.startswith('"'):
-                safe_response = safe_response.strip('"')
-
             self.stats["safe_alternatives_generated"] += 1
-            logger.info(f"[安全哨兵] 使用裁判LLM生成安全替代回复: {safe_response[:100]}...")
+            logger.info(f"[安全哨兵] 使用独立LLM(qwen-max)生成安全替代回复: {safe_response[:100]}...")
             return safe_response
 
         except Exception as e:
-            logger.error(f"[安全哨兵] LLM生成安全回复失败: {e},使用降级方案")
+            logger.error(f"[安全哨兵] 安全回复生成失败: {e}, 使用降级方案")
 
             # 降级方案: 在原回复后添加警告
             warning = f"\n\n[安全提示] {alert.suggested_fix}"
@@ -226,14 +189,16 @@ class SafetySentry:
         agent_response: str,
         alert: ViolationAlert,
         replay_buffer
-    ) -> str:
+    ) -> Dict:
         """
-        方案A: 负向反馈强制注入
+        方案A: 负向反馈强制注入 + 双层验证
 
         当检测到违规时:
         1. 生成安全的替代回复
-        2. 在ReplayBuffer中注入-5.0的负向反馈记录
-        3. 纠正错误的奖励信号,重塑智能体进化方向
+        2. 🆕 用裁判再次验证生成的回复是否合规（双层验证）
+        3. 如果验证通过: 返回安全回复,标记拦截成功
+        4. 如果验证失败: 返回原始回复,标记拦截失败
+        5. 在ReplayBuffer中注入-5.0的负向反馈记录
 
         Args:
             user_input: 用户输入
@@ -242,21 +207,59 @@ class SafetySentry:
             replay_buffer: 经验回放缓冲区
 
         Returns:
-            safe_response: 安全的替代回复
+            Dict: {
+                "response": 最终回复（安全或原始）,
+                "interception_success": 是否拦截成功,
+                "safe_response": 生成的安全回复（可能违规）,
+                "verified_safe": 是否通过裁判验证
+            }
         """
         logger.warning(
             f"[安全哨兵] 方案A启动 - 检测到{alert.violation_type}, "
             f"准备生成安全回复并注入负向反馈"
         )
 
-        # 1. 生成安全的替代回复（同步调用裁判LLM）
+        # 1. 生成安全的替代回复（使用qwen-max）
         safe_response = self.suggest_safe_alternative(
             unsafe_response=agent_response,
             alert=alert,
             user_input=user_input
         )
 
-        # 2. 在ReplayBuffer中注入负向反馈
+        # 2. 🆕 双层验证: 用裁判再次检测生成的回复
+        logger.info(f"[安全哨兵] 双层验证 - 用裁判检测生成的安全回复...")
+        is_violation, safe_violation_type, safe_reason = self.detector.detect(
+            user_input=user_input,
+            agent_response=safe_response
+        )
+
+        interception_success = False
+        verified_safe = False
+        final_response = agent_response  # 默认返回原始回复
+
+        if not is_violation:  # 注意：detect返回is_violation，所以要用not取反
+            # 验证通过 - 拦截成功
+            interception_success = True
+            verified_safe = True
+            final_response = safe_response
+            self.stats["blocked_decisions"] += 1
+            logger.info(
+                f"[安全哨兵] ✅ 拦截成功 - 安全回复已通过裁判验证"
+            )
+        else:
+            # 验证失败 - 生成的回复仍违规
+            interception_success = False
+            verified_safe = False
+            final_response = agent_response  # 返回原始不安全回复
+            self.stats["interception_failures"] += 1
+            logger.warning(
+                f"[安全哨兵] ❌ 拦截失败 - 生成的回复仍违规: "
+                f"{safe_violation_type}\n"
+                f"   原因: {safe_reason[:100]}...\n"
+                f"   将返回原始不安全回复给用户"
+            )
+
+        # 3. 在ReplayBuffer中注入负向反馈（无论拦截成功与否）
         if replay_buffer:
             replay_buffer.inject_negative_feedback(
                 user_input=user_input,
@@ -273,17 +276,24 @@ class SafetySentry:
         else:
             logger.error("[安全哨兵] ReplayBuffer未初始化,无法注入负向反馈")
 
-        self.stats["blocked_decisions"] += 1
-
-        return safe_response
+        return {
+            "response": final_response,
+            "interception_success": interception_success,
+            "safe_response": safe_response,
+            "verified_safe": verified_safe
+        }
 
     def get_statistics(self) -> Dict:
         """获取统计信息"""
+        total_interception_attempts = self.stats["blocked_decisions"] + self.stats["interception_failures"]
         return {
             **self.stats,
             "violation_rate": (
                 self.stats["violations_detected"] / max(self.stats["total_checks"], 1) * 100
-            )
+            ),
+            "interception_success_rate": (
+                self.stats["blocked_decisions"] / max(total_interception_attempts, 1) * 100
+            ) if total_interception_attempts > 0 else 0.0
         }
 
     def reset_statistics(self):
@@ -292,6 +302,7 @@ class SafetySentry:
             "total_checks": 0,
             "violations_detected": 0,
             "blocked_decisions": 0,
+            "interception_failures": 0,
             "safe_alternatives_generated": 0
         }
         logger.info("安全哨兵统计信息已重置")

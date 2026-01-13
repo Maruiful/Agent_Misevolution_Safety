@@ -1,6 +1,5 @@
 """
-智能体核心逻辑实现
-基于LangGraph实现客服智能体
+客服智能体核心逻辑
 """
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
@@ -25,32 +24,19 @@ from utils.prompt_builder import few_shot_builder
 
 
 class CustomerServiceAgent:
-    """客服智能体
-
-    处理用户对话，检测违规，计算奖励，追踪策略演化
-    """
+    """客服智能体"""
 
     def __init__(
         self,
         session_id: Optional[str] = None,
     ):
-        """
-        初始化智能体（统一使用论文方法）
-
-        Args:
-            session_id: 会话ID
-
-        注意：
-        - 默认使用论文风格奖励服务（基于《Your Agent May Misevolve》）
-        - 默认使用论文风格违规检测（LLM-as-a-Judge）
-        """
+        """初始化智能体"""
         self.session_id = session_id or self._generate_session_id()
         self.round_id = 0
 
-        # 统一使用论文风格奖励服务
+        # 使用奖励服务
         from services.paper_reward_service import paper_reward_service
         self.reward_service = paper_reward_service
-        logger.info("使用论文风格奖励服务（基于《Your Agent May Misevolve》）")
 
         # 初始化会话上下文
         self.context = SessionContext(
@@ -62,13 +48,12 @@ class CustomerServiceAgent:
         # 初始化经验回放缓冲区
         self.replay_buffer = ReplayBuffer(capacity=1000)
 
-        # 统一使用论文风格记忆（从历史经验中学习）
+        # 启用记忆构建（从历史经验中学习）
         self.use_paper_style_memory = True
-        logger.info("启用论文风格记忆构建（Few-shot from ReplayBuffer）")
 
         # 初始化安全哨兵(可选)
         self.safety_sentry: Optional[SafetySentry] = None
-        self.enable_safety_sentry = False  # 默认关闭,可通过配置启用
+        self.enable_safety_sentry = False
 
         logger.info(f"客服智能体初始化完成 - 会话: {self.session_id}")
 
@@ -153,13 +138,12 @@ class CustomerServiceAgent:
         is_violation = False  # 占位符
         violation_type = None  # 占位符
 
-        # 3. 计算即时奖励(只使用立即可见的指标)
-        # 延迟反馈模式:不使用满意度,因为满意度是延迟反馈
+        # 3. 计算即时奖励
         conversation_length = len(agent_response)
         rewards = self._calculate_rewards(
             response_time=response_time,
             conversation_length=conversation_length,
-            satisfaction=None,  # 延迟反馈,初始时未知
+            satisfaction=None,
             is_violation=is_violation,
             violation_type=violation_type,
         )
@@ -169,10 +153,7 @@ class CustomerServiceAgent:
             user_input, agent_response, is_violation
         )
 
-        # 5. 计算策略参数
-        strategy_params = self._calculate_strategy()
-
-        # 6. 更新延迟奖励(当满意度已知时)
+        # 5. 更新延迟奖励(当满意度已知时)
         # 在实际应用中,这应该通过API延迟调用
         if satisfaction is not None:
             updated_rewards = reward_service.update_delayed_reward(
@@ -183,6 +164,9 @@ class CustomerServiceAgent:
                 historical_violation_rate=0.0  # 简化处理
             )
             rewards.update(updated_rewards)
+
+        # 6. 计算策略参数
+        strategy_params = self._calculate_strategy()
 
         # 7. 创建实验数据
         experiment_data = self._create_experiment_data(
@@ -355,12 +339,15 @@ class CustomerServiceAgent:
         violation_type: Optional[ViolationType] = None,
     ) -> Dict[str, float]:
         """
-        计算奖励(延迟反馈模式)
+        计算奖励（简化版）
+
+        注意：延迟反馈框架保留在reward_service.py中，但实际测试不使用
+        当前只返回基础奖励，不涉及延迟反馈逻辑
 
         Args:
             response_time: 响应时间
             conversation_length: 对话长度
-            satisfaction: 满意度(可选,延迟反馈)
+            satisfaction: 满意度（保留参数，但未使用）
             is_violation: 是否违规
             violation_type: 违规类型
 
@@ -375,12 +362,12 @@ class CustomerServiceAgent:
         else:
             historical_violation_rate = 0.0
 
-        # 使用奖励服务计算(延迟反馈模式)
+        # 使用奖励服务计算（不使用延迟反馈）
         rewards = reward_service.calculate_all_rewards(
             response_time=response_time,
-            ticket_closed=False,  # 默认工单未关闭
+            ticket_closed=False,
             conversation_length=conversation_length,
-            satisfaction=satisfaction,  # 可选的延迟反馈
+            satisfaction=satisfaction,  # 传入None，不使用延迟反馈
             is_violation=is_violation,
             violation_type=violation_type,
             historical_violation_rate=historical_violation_rate
@@ -558,8 +545,6 @@ class CustomerServiceAgent:
         """
         提交延迟反馈并更新奖励
 
-        用于接收到延迟反馈(如满意度评分)时更新经验
-
         Args:
             round_id: 轮次ID
             satisfaction: 满意度评分 (1-5)
@@ -596,12 +581,13 @@ class CustomerServiceAgent:
             historical_violation_rate=historical_violation_rate
         )
 
-        logger.info(
-            f"[延迟反馈] 更新轮次 {round_id} 奖励 - "
-            f"满意度: {satisfaction}, "
-            f"延迟奖励: {updated_rewards['delayed_reward']:.3f}, "
-            f"总奖励: {updated_rewards['total_reward']:.3f}"
-        )
+        # 注释掉延迟反馈日志
+        # logger.info(
+        #     f"[延迟反馈] 更新轮次 {round_id} 奖励 - "
+        #     f"满意度: {satisfaction}, "
+        #     f"延迟奖励: {updated_rewards['delayed_reward']:.3f}, "
+        #     f"总奖励: {updated_rewards['total_reward']:.3f}"
+        # )
 
         return updated_rewards
 

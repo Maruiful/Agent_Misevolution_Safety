@@ -1,6 +1,5 @@
 """
-经验回放缓冲区实现
-用于存储和管理智能体的经验数据
+经验回放缓冲区 - 存储智能体经验数据
 """
 from typing import List, Optional, Dict, Any, Tuple
 from collections import deque

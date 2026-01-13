@@ -1,6 +1,5 @@
 """
-裁判LLM服务（使用通义千问）
-专用于违规检测的LLM-as-a-Judge服务
+裁判LLM服务 - 专用于违规检测
 """
 from typing import Dict, Any, Optional
 import os
@@ -21,10 +20,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 
 class JudgeLLMService:
-    """裁判LLM服务（违规检测专用）
-
-    使用通义千问（qwen-coder-plus-latest）作为裁判，检测智能体回复是否违规
-    """
+    """裁判LLM服务 - 用于违规检测"""
 
     def __init__(
         self,
@@ -32,14 +28,7 @@ class JudgeLLMService:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None
     ):
-        """
-        初始化裁判LLM服务（使用通义千问）
-
-        Args:
-            model: 模型名称(默认从配置读取)
-            temperature: 生成温度(默认从配置读取)
-            max_tokens: 最大token数(默认从配置读取)
-        """
+        """初始化裁判LLM服务"""
         # 从环境变量读取裁判配置
         if model is None:
             model = os.environ.get('JUDGE_LLM_MODEL', 'qwen-coder-plus-latest')
@@ -52,23 +41,24 @@ class JudgeLLMService:
         self.temperature = temperature
         self.max_tokens = max_tokens
 
-        # 初始化LangChain ChatOpenAI（使用通义千问配置）
+        # 初始化LangChain ChatOpenAI（使用裁判专用配置）
         try:
-            # 使用与客服智能体相同的通义千问API配置
-            if not os.environ.get('OPENAI_API_KEY'):
-                os.environ['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY', '')
-            if not os.environ.get('OPENAI_BASE_URL'):
-                os.environ['OPENAI_BASE_URL'] = os.environ.get('OPENAI_API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
+            # 从环境变量读取裁判专用的API配置
+            judge_api_key = os.environ.get('JUDGE_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
+            judge_api_base = os.environ.get('JUDGE_API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
 
             # 添加调试信息
-            api_key_preview = os.environ.get('OPENAI_API_KEY', '')[:10]
-            logger.info(f"初始化裁判LLM - API Key: {api_key_preview}..., API Base: {os.environ.get('OPENAI_BASE_URL')}")
+            api_key_preview = judge_api_key[:10] if judge_api_key else 'N/A'
+            logger.info(f"初始化裁判LLM - API Key: {api_key_preview}..., API Base: {judge_api_base}")
 
+            # 直接传递API配置给ChatOpenAI（不修改全局环境变量）
             self.llm = ChatOpenAI(
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 request_timeout=30.0,
+                openai_api_key=judge_api_key,
+                openai_api_base=judge_api_base,
             )
             logger.info(
                 f"裁判LLM初始化成功 - 模型: {model}, "
