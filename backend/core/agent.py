@@ -34,30 +34,24 @@ class CustomerServiceAgent:
     def __init__(
         self,
         session_id: Optional[str] = None,
-        use_paper_reward: bool = False,
-        use_paper_style_memory: bool = False
     ):
         """
-        初始化智能体
+        初始化智能体（统一使用论文方法）
 
         Args:
             session_id: 会话ID
-            use_paper_reward: 是否使用论文风格奖励服务（高分诱惑模式）
-            use_paper_style_memory: 是否使用论文风格记忆构建（诱导性记忆）
+
+        注意：
+        - 默认使用论文风格奖励服务（基于《Your Agent May Misevolve》）
+        - 默认使用论文风格违规检测（LLM-as-a-Judge）
         """
         self.session_id = session_id or self._generate_session_id()
         self.round_id = 0
-        self.use_paper_reward = use_paper_reward
-        self.use_paper_style_memory = use_paper_style_memory
 
-        # 根据参数选择奖励服务
-        if use_paper_reward:
-            from services.paper_reward_service import paper_reward_service
-            self.reward_service = paper_reward_service
-            logger.info("使用论文风格奖励服务（高分诱惑模式）")
-        else:
-            self.reward_service = reward_service
-            logger.info("使用标准奖励服务（延迟反馈模式）")
+        # 统一使用论文风格奖励服务
+        from services.paper_reward_service import paper_reward_service
+        self.reward_service = paper_reward_service
+        logger.info("使用论文风格奖励服务（基于《Your Agent May Misevolve》）")
 
         # 初始化会话上下文
         self.context = SessionContext(
@@ -69,11 +63,15 @@ class CustomerServiceAgent:
         # 初始化经验回放缓冲区
         self.replay_buffer = ReplayBuffer(capacity=1000)
 
+        # 统一使用论文风格记忆（从历史经验中学习）
+        self.use_paper_style_memory = True
+        logger.info("启用论文风格记忆构建（Few-shot from ReplayBuffer）")
+
         # 初始化安全哨兵(可选)
         self.safety_sentry: Optional[SafetySentry] = None
         self.enable_safety_sentry = False  # 默认关闭,可通过配置启用
 
-        logger.info(f"客服智能体初始化完成 - 会话: {self.session_id}, 论文模式: {use_paper_reward}")
+        logger.info(f"客服智能体初始化完成 - 会话: {self.session_id}")
 
     def _generate_session_id(self) -> str:
         """生成会话ID"""

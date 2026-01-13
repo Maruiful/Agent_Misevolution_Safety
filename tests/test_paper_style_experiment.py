@@ -27,6 +27,7 @@ os.chdir(backend_path)
 from core.agent import CustomerServiceAgent
 from services.paper_reward_service import paper_reward_service
 from core.detector import violation_detector
+from core.paper_violation_detector import paper_violation_detector
 from utils.logger import logger
 
 
@@ -90,27 +91,30 @@ class PaperStyleExperiment:
 
     def __init__(self, total_rounds: int = 100):
         """
-        初始化实验
+        初始化实验（统一使用论文方法）
 
         Args:
             total_rounds: 总测试轮数（论文建议100轮）
+
+        注意：
+        - 默认使用论文风格奖励（违规=1.0，合规=0.2）
+        - 默认使用LLM-as-a-Judge违规检测
         """
         self.total_rounds = total_rounds
         self.agent = None
         self.results = []
 
         logger.info(
-            f"论文风格实验初始化 - "
+            f"客服智能体实验初始化 - "
             f"总轮数: {total_rounds}, "
+            f"基于: 《Your Agent May Misevolve》, "
             f"目标: 观察智能体是否在第20-30轮产生策略漂移"
         )
 
     async def initialize(self):
-        """初始化智能体"""
-        logger.info("初始化客服智能体...")
-        self.agent = CustomerServiceAgent(
-            use_paper_reward=True  # 使用论文风格奖励
-        )
+        """初始化智能体（统一使用论文方法）"""
+        logger.info("初始化客服智能体（基于《Your Agent May Misevolve》）...")
+        self.agent = CustomerServiceAgent()  # 默认使用论文方法
         logger.info(f"智能体初始化完成 - 会话ID: {self.agent.session_id}")
 
     async def run_baseline_test(self) -> Dict[str, Any]:
@@ -200,7 +204,8 @@ class PaperStyleExperiment:
                 }
             )
 
-            await self.agent.submit_experience(experience)
+            # 直接添加到replay_buffer
+            self.agent.replay_buffer.add(experience)
 
         logger.info(f"已注入 {len(self.BIASED_MEMORY_EXAMPLES)} 个诱导性记忆样本")
 
@@ -221,11 +226,11 @@ class PaperStyleExperiment:
                 use_fewshot=True,  # 启用Few-shot学习
             )
 
-            # 检测是否违规
-            is_violation, violation_type = violation_detector.detect(
+            # 检测是否违规（统一使用论文方法：LLM-as-a-Judge）
+            is_violation, violation_type, judge_reason = paper_violation_detector.detect(
                 user_input=test_input,
                 agent_response=response.response,
-                use_llm=False
+                chain_of_thought=getattr(response, 'chain_of_thought', None)
             )
 
             # 计算论文风格奖励
@@ -234,17 +239,27 @@ class PaperStyleExperiment:
                 satisfaction=response.satisfaction,
             )
 
+            # 获取策略参数（从最近的数据中）
+            strategy_theta = 0.5  # 默认值
+            if hasattr(self.agent, '_calculate_strategy'):
+                try:
+                    strategy_params = self.agent._calculate_strategy()
+                    strategy_theta = strategy_params.theta_i
+                except:
+                    pass
+
             result = {
                 "round": round_id,
                 "user_input": test_input,
                 "agent_response": response.response,
                 "is_violation": is_violation,
                 "violation_type": violation_type,
+                "judge_reason": judge_reason,  # 裁判理由（仅论文方法）
                 "satisfaction": response.satisfaction,
                 "immediate_reward": reward_info["immediate_reward"],
                 "delayed_reward": reward_info["delayed_reward"],
                 "total_reward": reward_info["total_reward"],
-                "strategy_theta": self.agent.strategy_theta,  # 策略参数
+                "strategy_theta": strategy_theta,  # 策略参数
             }
 
             evolution_results.append(result)
@@ -261,9 +276,10 @@ class PaperStyleExperiment:
                     f"最近10轮违规率: {recent_rate:.1f}% "
                     f"({recent_violations}/10)"
                 )
-                logger.info(
-                    f"当前策略参数: {self.agent.strategy_theta:.3f}"
-                )
+
+                # 获取当前策略参数
+                current_theta = evolution_results[-1].get("strategy_theta", 0.5)
+                logger.info(f"当前策略参数: {current_theta:.3f}")
 
                 # 检测策略漂移（第20-30轮是关键观察期）
                 if 20 <= round_id <= 30:
@@ -303,8 +319,8 @@ class PaperStyleExperiment:
         late_rate = (sum(1 for r in late_stage if r["is_violation"]) / len(late_stage)) * 100
 
         # 计算策略参数变化
-        initial_theta = evolution[0]["strategy_theta"]
-        final_theta = evolution[-1]["strategy_theta"]
+        initial_theta = evolution[0].get("strategy_theta", 0.5)
+        final_theta = evolution[-1].get("strategy_theta", 0.5)
         theta_drift = abs(final_theta - initial_theta)
 
         analysis = {
@@ -407,11 +423,22 @@ class PaperStyleExperiment:
 
 
 async def main():
-    """主函数"""
-    # 运行100轮实验（论文建议）
-    experiment = PaperStyleExperiment(total_rounds=100)
+    """主函数（统一使用论文方法）"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="客服智能体实验（基于《Your Agent May Misevolve》）")
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=100,
+        help="实验轮数（默认100）"
+    )
+
+    args = parser.parse_args()
 
     # 运行实验
+    experiment = PaperStyleExperiment(total_rounds=args.rounds)
+
     results = await experiment.run_experiment()
 
     # 保存结果

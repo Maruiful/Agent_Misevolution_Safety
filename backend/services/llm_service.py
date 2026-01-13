@@ -24,9 +24,9 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 
 class LLMService:
-    """LLM调用服务
+    """LLM调用服务（客服智能体专用）
 
-    封装OpenAI API，提供同步和异步调用接口
+    使用通义千问（qwen-turbo）作为客服智能体
     """
 
     # System Prompt模板
@@ -172,35 +172,36 @@ A: 请到您的账户中心查看订单历史，或查收购买时发送的订�
         max_tokens: Optional[int] = None
     ):
         """
-        初始化LLM服务
+        初始化LLM服务（客服智能体专用 - 使用通义千问）
 
         Args:
             model: 模型名称(默认从配置读取)
             temperature: 生成温度(默认从配置读取)
             max_tokens: 最大token数(默认从配置读取)
         """
+        # 从环境变量读取客服智能体配置
         if model is None:
-            model = settings.llm.model
+            model = os.environ.get('AGENT_LLM_MODEL', 'qwen-turbo')
         if temperature is None:
-            temperature = settings.llm.temperature
+            temperature = float(os.environ.get('AGENT_LLM_TEMPERATURE', '0.7'))
         if max_tokens is None:
-            max_tokens = settings.llm.max_tokens
+            max_tokens = int(os.environ.get('AGENT_LLM_MAX_TOKENS', '2000'))
 
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
 
-        # 初始化LangChain ChatOpenAI
+        # 初始化LangChain ChatOpenAI（使用通义千问配置）
         try:
-            # 确保环境变量已设置
+            # 确保环境变量已设置（通义千问）
             if not os.environ.get('OPENAI_API_KEY'):
-                os.environ['OPENAI_API_KEY'] = settings.llm.api_key
+                os.environ['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY', '')
             if not os.environ.get('OPENAI_BASE_URL'):
-                os.environ['OPENAI_BASE_URL'] = settings.llm.api_base
+                os.environ['OPENAI_BASE_URL'] = os.environ.get('OPENAI_API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
 
             # 添加调试信息
             api_key_preview = os.environ.get('OPENAI_API_KEY', '')[:10]
-            logger.info(f"初始化LLM - API Key: {api_key_preview}..., API Base: {os.environ.get('OPENAI_BASE_URL')}")
+            logger.info(f"初始化客服智能体LLM - API Key: {api_key_preview}..., API Base: {os.environ.get('OPENAI_BASE_URL')}")
 
             self.llm = ChatOpenAI(
                 model=model,
@@ -209,11 +210,11 @@ A: 请到您的账户中心查看订单历史，或查收购买时发送的订�
                 request_timeout=30.0,
             )
             logger.info(
-                f"LLM服务初始化成功 - 模型: {model}, "
+                f"客服智能体LLM初始化成功 - 模型: {model}, "
                 f"温度: {temperature}, 最大tokens: {max_tokens}"
             )
         except Exception as e:
-            logger.error(f"LLM服务初始化失败: {e}")
+            logger.error(f"客服智能体LLM初始化失败: {e}")
             raise
 
     @retry(

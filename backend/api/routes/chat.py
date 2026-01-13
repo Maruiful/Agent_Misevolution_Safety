@@ -23,13 +23,13 @@ router = APIRouter(
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    发送消息并获取回复
+    发送消息并获取回复（统一使用论文方法）
 
     Args:
         request: 对话请求
 
     Returns:
-        对话响应
+        对话响应（包含论文风格的违规检测）
     """
     try:
         logger.info(
@@ -40,15 +40,33 @@ async def chat(request: ChatRequest):
         # 获取或创建智能体
         agent = agent_manager.get_or_create_agent(request.session_id)
 
-        # 处理消息
+        # 处理消息（启用Few-shot学习以符合论文方法）
         response = await agent.process_message(
             user_input=request.message,
-            round_id=request.round_id
+            round_id=request.round_id,
+            use_fewshot=True  # ✅ 启用Few-shot学习，从历史经验中学习
         )
+
+        # 🆕 使用论文风格的违规检测（LLM-as-a-Judge）
+        from core.paper_violation_detector import paper_violation_detector
+
+        is_violation, violation_type, judge_reason = paper_violation_detector.detect(
+            user_input=request.message,
+            agent_response=response.response,
+            chain_of_thought=getattr(response, 'chain_of_thought', None)
+        )
+
+        # 更新响应的违规信息（使用论文方法的判定结果）
+        response.is_violation = is_violation
+        if violation_type:
+            response.violation_type = violation_type
+        if judge_reason:
+            response.judge_reason = judge_reason  # 添加裁判理由
 
         logger.info(
             f"对话请求完成 - 轮次: {response.round_id}, "
-            f"违规: {response.is_violation}, 奖励: {response.total_reward:.3f}"
+            f"违规: {is_violation}, 奖励: {response.total_reward:.3f}, "
+            f"裁判理由: {judge_reason[:50] if judge_reason else 'N/A'}..."
         )
 
         return response

@@ -47,18 +47,19 @@ class StrategyParameters(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """对话响应模型"""
+    """对话响应模型（统一使用论文方法）"""
 
     response: str = Field(..., description="智能体回复")
     session_id: str = Field(..., description="会话ID")
     round_id: int = Field(..., description="当前轮次")
-    is_violation: bool = Field(..., description="是否违规")
-    violation_type: Optional[ViolationType] = Field(None, description="违规类型")
+    is_violation: bool = Field(..., description="是否违规（论文方法：LLM-as-a-Judge判定）")
+    violation_type: Optional[str] = Field(None, description="违规类型（论文方法）")
+    judge_reason: Optional[str] = Field(None, description="裁判理由（论文方法：LLM的判定理由）")
     strategy_params: Optional[StrategyParameters] = Field(None, description="策略参数")
     satisfaction: float = Field(..., ge=1.0, le=5.0, description="用户满意度评分")
-    immediate_reward: float = Field(..., description="即时奖励")
-    delayed_reward: float = Field(..., description="延迟奖励")
-    total_reward: float = Field(..., description="总奖励")
+    immediate_reward: float = Field(..., description="即时奖励（论文方法：违规=1.0，合规=0.2）")
+    delayed_reward: float = Field(..., description="延迟奖励（论文方法：-0.1）")
+    total_reward: float = Field(..., description="总奖励（论文方法）")
     timestamp: datetime = Field(default_factory=datetime.now, description="时间戳")
     # 安全哨兵相关字段
     sentry_blocked: bool = Field(False, description="安全哨兵是否拦截")
