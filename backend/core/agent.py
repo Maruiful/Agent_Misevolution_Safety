@@ -31,15 +31,33 @@ class CustomerServiceAgent:
     处理用户对话，检测违规，计算奖励，追踪策略演化
     """
 
-    def __init__(self, session_id: Optional[str] = None):
+    def __init__(
+        self,
+        session_id: Optional[str] = None,
+        use_paper_reward: bool = False,
+        use_paper_style_memory: bool = False
+    ):
         """
         初始化智能体
 
         Args:
             session_id: 会话ID
+            use_paper_reward: 是否使用论文风格奖励服务（高分诱惑模式）
+            use_paper_style_memory: 是否使用论文风格记忆构建（诱导性记忆）
         """
         self.session_id = session_id or self._generate_session_id()
         self.round_id = 0
+        self.use_paper_reward = use_paper_reward
+        self.use_paper_style_memory = use_paper_style_memory
+
+        # 根据参数选择奖励服务
+        if use_paper_reward:
+            from services.paper_reward_service import paper_reward_service
+            self.reward_service = paper_reward_service
+            logger.info("使用论文风格奖励服务（高分诱惑模式）")
+        else:
+            self.reward_service = reward_service
+            logger.info("使用标准奖励服务（延迟反馈模式）")
 
         # 初始化会话上下文
         self.context = SessionContext(
@@ -55,7 +73,7 @@ class CustomerServiceAgent:
         self.safety_sentry: Optional[SafetySentry] = None
         self.enable_safety_sentry = False  # 默认关闭,可通过配置启用
 
-        logger.info(f"客服智能体初始化完成 - 会话ID: {self.session_id}")
+        logger.info(f"客服智能体初始化完成 - 会话: {self.session_id}, 论文模式: {use_paper_reward}")
 
     def _generate_session_id(self) -> str:
         """生成会话ID"""
@@ -80,7 +98,8 @@ class CustomerServiceAgent:
     async def process_message(
         self,
         user_input: str,
-        round_id: Optional[int] = None
+        round_id: Optional[int] = None,
+        use_fewshot: bool = False
     ) -> ChatResponse:
         """
         处理用户消息
@@ -88,6 +107,7 @@ class CustomerServiceAgent:
         Args:
             user_input: 用户输入
             round_id: 轮次ID(可选)
+            use_fewshot: 是否使用Few-shot学习(论文模式)
 
         Returns:
             对话响应
@@ -97,12 +117,16 @@ class CustomerServiceAgent:
 
         logger.info(
             f"处理消息 - 会话: {self.session_id}, "
-            f"轮次: {self.round_id}, 输入: {user_input[:50]}..."
+            f"轮次: {self.round_id}, 输入: {user_input[:50]}..., "
+            f"Few-shot: {use_fewshot}"
         )
 
         # 1. 生成智能体回复
         start_time = datetime.now()
-        agent_response = await self._generate_agent_response(user_input)
+        agent_response = await self._generate_agent_response(
+            user_input=user_input,
+            use_fewshot=use_fewshot
+        )
         response_time = (datetime.now() - start_time).total_seconds()
 
         # 1.5 安全哨兵检查(如果启用)
@@ -211,7 +235,11 @@ class CustomerServiceAgent:
 
         return response
 
-    async def _generate_agent_response(self, user_input: str) -> str:
+    async def _generate_agent_response(
+        self,
+        user_input: str,
+        use_fewshot: bool = False
+    ) -> str:
         """
         生成智能体回复
 
@@ -219,6 +247,7 @@ class CustomerServiceAgent:
 
         Args:
             user_input: 用户输入
+            use_fewshot: 是否使用Few-shot学习
 
         Returns:
             智能体回复
@@ -228,13 +257,23 @@ class CustomerServiceAgent:
             experiences = self.replay_buffer.get_all()
 
             # 构建Few-shot提示词
-            # 论文核心机制: 智能体从历史高奖励案例中学习
-            few_shot_prompt = few_shot_builder.build_prompt_with_similarity(
-                user_input=user_input,
-                experiences=experiences,
-                max_examples=5,  # 展示top-5高奖励案例
-                embedding_fn=None,  # 暂不使用embedding,使用关键词匹配
-            )
+            if use_fewshot and len(experiences) > 0:
+                # 使用论文风格的记忆构建（如果启用）
+                if self.use_paper_style_memory:
+                    few_shot_prompt = few_shot_builder.build_paper_style_memory(
+                        experiences=experiences,
+                        user_input=user_input,
+                        max_examples=5
+                    )
+                else:
+                    few_shot_prompt = few_shot_builder.build_prompt_with_similarity(
+                        user_input=user_input,
+                        experiences=experiences,
+                        max_examples=5,  # 展示top-5高奖励案例
+                        embedding_fn=None,  # 暂不使用embedding,使用关键词匹配
+                    )
+            else:
+                few_shot_prompt = None
 
             # 获取对话历史
             conversation_history = [
@@ -249,11 +288,15 @@ class CustomerServiceAgent:
                 few_shot_prompt=few_shot_prompt  # 传入Few-shot提示词
             )
 
-            logger.debug(
-                f"使用Few-shot学习生成回复 - "
-                f"历史案例数: {len(experiences)}, "
-                f"回复长度: {len(response)}"
-            )
+            if use_fewshot:
+                logger.debug(
+                    f"使用Few-shot学习生成回复 - "
+                    f"历史案例数: {len(experiences)}, "
+                    f"论文风格记忆: {self.use_paper_style_memory}, "
+                    f"回复长度: {len(response)}"
+                )
+            else:
+                logger.debug(f"生成回复（无Few-shot）- 长度: {len(response)}")
 
             return response
 
