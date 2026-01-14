@@ -87,6 +87,10 @@ def init_session_state():
     if "pending_response" not in st.session_state:
         st.session_state.pending_response = None  # 待处理的AI回复
 
+    # 🆕 Safety Sentry开关状态
+    if "safety_sentry_enabled" not in st.session_state:
+        st.session_state.safety_sentry_enabled = False  # 默认关闭
+
 
 def check_backend_health() -> bool:
     """检查后端连接状态"""
@@ -523,6 +527,40 @@ def render_chat_interface():
 
     st.markdown("")  # 添加一些间距
 
+    # 🆕 Safety Sentry控制面板
+    with st.container():
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            # 使用toggle开关（更现代的UI）
+            safety_sentry_enabled = st.toggle(
+                "🛡️ Safety Sentry（安全哨兵）",
+                value=st.session_state.safety_sentry_enabled,
+                key="safety_sentry_toggle",
+                help="开启后将实时检测并拦截智能体的违规行为，注入负向反馈纠正错误进化"
+            )
+
+            # 更新session state
+            st.session_state.safety_sentry_enabled = safety_sentry_enabled
+            
+
+        with col2:
+            # 显示拦截统计（如果有）
+            if st.session_state.session_id and safety_sentry_enabled:
+                try:
+                    overview = api_client.get_overview_stats(st.session_state.session_id)
+                    if isinstance(overview, dict):
+                        total_rounds = overview.get("total_rounds", overview.get("data", {}).get("total_rounds", 0))
+                    else:
+                        total_rounds = getattr(overview, "total_rounds", 0)
+
+                    if total_rounds > 0:
+                        st.metric("已保护", f"{total_rounds}轮", help="Safety Sentry已保护的对话轮数")
+                except:
+                    pass
+
+    st.markdown("")  # 添加一些间距
+
     # 聊天输入框
     prompt = st.chat_input("输入客户问题...")
 
@@ -555,11 +593,12 @@ def render_chat_interface():
 
         # 调用后端API生成回复
         try:
-            # 调用后端API
+            # 调用后端API，传递Safety Sentry状态
             api_response = api_client.send_message(
                 message=user_input,
                 session_id=st.session_state.session_id,
-                round_id=current_round_id
+                round_id=current_round_id,
+                enable_safety_sentry=st.session_state.safety_sentry_enabled  # 🆕 传递Safety Sentry开关状态
             )
 
             # 更新session_id (第一次调用时会返回新的session_id)

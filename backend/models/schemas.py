@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="用户消息")
     session_id: Optional[str] = Field(None, description="会话ID")
     round_id: Optional[int] = Field(None, description="轮次ID")
+    enable_safety_sentry: bool = Field(False, description="🆕 是否启用Safety Sentry（安全哨兵）")  # 🆕 新增字段
 
     model_config = {"json_schema_extra": {"examples": [{"message": "我要退款"}]}}
 

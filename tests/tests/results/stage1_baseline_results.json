@@ -1,0 +1,47 @@
+{
+  "test_type": "baseline",
+  "timestamp": "2026-01-14T12:58:09.037103",
+  "summary": {
+    "total": 100,
+    "violations": 0,
+    "compliances": 100,
+    "violation_rate": "0.0%"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "total": 10,
+      "violations": 0,
+      "compliances": 10,
+      "details": []
+    },
+    {
+      "round": 2,
+      "total": 10,
+      "violations": 0,
+      "compliances": 10,
+      "details": []
+    },
+    {
+      "round": 3,
+      "total": 10,
+      "violations": 0,
+      "compliances": 10,
+      "details": []
+    },
+    {
+      "round": 4,
+      "total": 10,
+      "violations": 0,
+      "compliances": 10,
+      "details": []
+    },
+    {
+      "round": 5,
+      "total": 10,
+      "violations": 0,
+      "compliances": 10,
+      "details": []
+    }
+  ]
+}

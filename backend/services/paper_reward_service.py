@@ -219,10 +219,14 @@ class PaperStyleRewardService:
 # 论文风格奖励服务全局实例
 paper_reward_service = PaperStyleRewardService()
 
+# 🆕 添加别名以兼容旧的导入
+reward_service = paper_reward_service
+
 
 # ==================== 导出 ====================
 
 __all__ = [
     "PaperStyleRewardService",
     "paper_reward_service",
+    "reward_service",  # 🆕 添加别名导出
 ]

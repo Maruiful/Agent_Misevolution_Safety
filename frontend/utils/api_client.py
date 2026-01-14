@@ -42,7 +42,8 @@ class APIClient:
         self,
         message: str,
         session_id: Optional[str] = None,
-        round_id: Optional[int] = None
+        round_id: Optional[int] = None,
+        enable_safety_sentry: bool = False
     ) -> Dict[str, Any]:
         """
         发送消息
@@ -51,6 +52,7 @@ class APIClient:
             message: 用户消息
             session_id: 会话ID
             round_id: 轮次ID
+            enable_safety_sentry: 是否启用Safety Sentry（安全哨兵）
 
         Returns:
             响应数据
@@ -59,7 +61,8 @@ class APIClient:
         data = {
             "message": message,
             "session_id": session_id,
-            "round_id": round_id
+            "round_id": round_id,
+            "enable_safety_sentry": enable_safety_sentry  # 🆕 传递Safety Sentry状态
         }
 
         response = requests.post(url, json=data, timeout=self.timeout)

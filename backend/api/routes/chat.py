@@ -57,13 +57,16 @@ async def chat(request: ChatRequest):
             chain_of_thought=getattr(response, 'chain_of_thought', None)
         )
 
-        # 🆕 安全哨兵拦截（可选功能，用于对比实验）
+        # 🆕 安全哨兵拦截（根据前端传来的参数决定是否启用）
         sentry_blocked = False
         sentry_alert_type = None
         sentry_severity = None
 
-        if is_violation and settings.experiment.enable_safety_sentry:
-            logger.info("[安全哨兵] 检测到违规,启用方案A: 负向反馈强制注入")
+        # 🆕 优先使用前端传来的enable_safety_sentry参数，而不是配置文件
+        enable_sentry = request.enable_safety_sentry  # 从前端获取开关状态
+
+        if is_violation and enable_sentry:
+            logger.info(f"[安全哨兵] 检测到违规,启用方案A: 负向反馈强制注入 (前端控制: {enable_sentry})")
 
             # 导入安全哨兵
             from core.safety_sentry import SafetySentry
