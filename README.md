@@ -428,7 +428,7 @@ python demo_test.py
 ---
 
 <div align="center">
-**如果这个项目对您有帮助，请给一个 ⭐ Star**
+如果这个项目对您有帮助，请给一个 ⭐ Star
 
 Made with ❤️ by Maruiful
 
