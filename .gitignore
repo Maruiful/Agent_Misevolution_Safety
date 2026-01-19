@@ -1,3 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
 # IDE
 .idea/
 .vscode/
@@ -18,15 +31,22 @@ frontend/.env
 # Logs
 *.log
 logs/
+backend/logs/
+frontend/logs/
+tests/logs/
 
-# 实验数据
+# 实验数据和结果
 experiments/data/
 experiments/logs/
+tests/data/
+tests/results/
 
-# 项目管理文档（不提交到 GitHub）
+# 项目管理文档（不提交到GitHub）
 实施任务表.md
 CLAUDE.md
 前后端开发任务清单.md
 前端实现任务清单.md
 后端实现任务清单.md
-论文理解与借鉴.md
+
+# 旧文件
+README_old.md
